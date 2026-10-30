@@ -76,4 +76,8 @@ An independent read-only review agent audited commits `176b349..aae2e39`; a fres
 | WebSocket accept carried no request ID | Low | header added to `websocket.accept` | raw-ASGI handshake test |
 | Context leakage between requests untested | Low | test added | `test_request_context_does_not_leak_after_response` |
 | Stdlib logs (uvicorn, SQLAlchemy) plain text and unredacted; access log prints query strings (WS tickets) | Medium | all records via `ProcessorFormatter`; `uvicorn.access` disabled; `--no-access-log` | real uvicorn run: 0 non-JSON lines, `?ticket=SECRET123` appears 0 times |
+| No container hardening on app services | Low | read-only rootfs, `cap_drop: [ALL]`, `no-new-privileges`, tmpfs for `/tmp` and Next cache | `docker inspect` shows all three; stack healthy |
+| `pg_isready` over socket reports ready during first-start init | Low | health check over TCP (`-h 127.0.0.1`) | fresh volume: init `CREATE DATABASE` precedes real server start; backend healthy |
+| CI would run Python 3.12 while docs/image use 3.13 | Low | `backend/.python-version` = 3.13 (honoured by uv and setup-uv) | `uv run python --version` → 3.13.18 |
+| Container logs plain text | Medium | as above + `--no-access-log` in image | recreated stack: 0 non-JSON backend log lines |
 | Redaction exact-match, top level only | Medium | word-part + substring matching, recursive into mappings/sequences; `prompt_tokens` stays visible | 11 sensitive + 4 preserved key cases, nested case |

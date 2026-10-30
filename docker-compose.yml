@@ -2,6 +2,12 @@
 # database password so no credential default ever lives in this file.
 name: dentalvoice
 
+# Least-privilege defaults for application containers (both images already run as uid 10001).
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
 services:
   db:
     image: postgres:16-alpine
@@ -16,12 +22,16 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # TCP, not the Unix socket: during first-start init the entrypoint runs a temporary
+      # socket-only server that pg_isready would otherwise report as ready.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 10s
 
   backend:
+    <<: *hardened
     build: ./backend
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -29,6 +39,8 @@ services:
       VOICE_PROVIDER_MODE: ${VOICE_PROVIDER_MODE:-mock}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dentalvoice}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-dentalvoice}
       CORS_ORIGINS: '["http://localhost:3000"]'
+    tmpfs:
+      - /tmp
     depends_on:
       db:
         condition: service_healthy
@@ -36,10 +48,14 @@ services:
       - "127.0.0.1:8000:8000"
 
   frontend:
+    <<: *hardened
     build:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:mode=1777
     depends_on:
       backend:
         condition: service_healthy
