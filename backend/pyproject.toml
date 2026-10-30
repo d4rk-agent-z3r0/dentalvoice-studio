@@ -52,8 +52,12 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "N", "S", "ASYNC", "C4", "SIM", "RUF", "PT", "TID"]
 ignore = ["S101"]
 
+[tool.ruff.lint.isort]
+# Explicit, so import grouping does not depend on the directory ruff is run from.
+known-first-party = ["app", "tests", "compliance", "add_spdx_headers"]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S105", "S106"]
+"**/tests/**" = ["S105", "S106"]
 
 [tool.mypy]
 python_version = "3.12"
