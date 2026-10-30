@@ -334,10 +334,53 @@ def npm_sbom() -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- normalisation
 
+# cdxgen's registry lookup adds `cdx:npm:*` properties. Only facts fixed for the locked version are
+# kept. Package-level statistics (version counts, last-modified times, release cadence) change
+# whenever a package publishes anything, and maintainer/publisher fields carry third parties'
+# personal data (names, emails) that an inventory does not need.
+NPM_STABLE_PROPERTIES = frozenset(
+    {
+        "cdx:npm:artifactIntegrity",
+        "cdx:npm:artifactShasum",
+        "cdx:npm:bin",
+        "cdx:npm:buildScripts",
+        "cdx:npm:cpu",
+        "cdx:npm:has_binary",
+        "cdx:npm:hasInstallScript",
+        "cdx:npm:libc",
+        "cdx:npm:os",
+        "cdx:npm:package:development",
+        "cdx:npm:package:optional",
+        "cdx:npm:package:type-only",
+        "cdx:npm:provenanceUrl",
+        "cdx:npm:publishTime",
+        "cdx:npm:risky_scripts",
+        "cdx:npm:scripts",
+        "cdx:npm:trustedPublishing",
+    }
+)
+
+
+def _drop_volatile_properties(node: Any) -> None:
+    if isinstance(node, dict):
+        if isinstance(node.get("properties"), list):
+            node["properties"] = [
+                prop
+                for prop in node["properties"]
+                if not str(prop.get("name", "")).startswith("cdx:npm:")
+                or prop["name"] in NPM_STABLE_PROPERTIES
+            ]
+        for value in node.values():
+            _drop_volatile_properties(value)
+    elif isinstance(node, list):
+        for item in node:
+            _drop_volatile_properties(item)
+
 
 def normalise_sbom(sbom: dict[str, Any]) -> dict[str, Any]:
-    """Strip run-specific fields so regeneration is byte-identical."""
+    """Strip run-specific, time-varying and personal fields so regeneration is byte-identical."""
     sbom.pop("serialNumber", None)
+    _drop_volatile_properties(sbom)
     # cdxgen adds a prose annotation stamped with the run time; it carries no inventory data.
     sbom.pop("annotations", None)
     metadata = sbom.get("metadata", {})

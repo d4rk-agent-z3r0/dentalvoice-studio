@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT
 from typing import Any
 
-import compliance
 import pytest
+
+import compliance
 from compliance import Dependency, classify, diff_inventories, normalise_sbom, violations
 
 POLICY: dict[str, Any] = {
@@ -139,3 +140,24 @@ def test_normalise_sbom_is_order_and_run_independent() -> None:
     }
     assert normalise_sbom(run_a) == normalise_sbom(run_b)
     assert "serialNumber" not in normalise_sbom(run_a)
+
+
+def test_normalise_sbom_drops_volatile_and_personal_npm_properties() -> None:
+    sbom = {
+        "components": [
+            {
+                "bom-ref": "pkg:npm/a@1.0.0",
+                "properties": [
+                    {"name": "SrcFile", "value": "pnpm-lock.yaml"},
+                    {"name": "cdx:npm:artifactIntegrity", "value": "sha512-x"},
+                    {"name": "cdx:npm:publishTime", "value": "2026-01-01T00:00:00Z"},
+                    {"name": "cdx:npm:versionCount", "value": "3077"},
+                    {"name": "cdx:npm:lastModifiedTime", "value": "2026-10-29T23:43:26Z"},
+                    {"name": "cdx:npm:maintainerSet", "value": "alice, alice@example.com"},
+                    {"name": "cdx:npm:publisherEmail", "value": "bob@example.com"},
+                ],
+            }
+        ]
+    }
+    names = [p["name"] for p in normalise_sbom(sbom)["components"][0]["properties"]]
+    assert names == ["SrcFile", "cdx:npm:artifactIntegrity", "cdx:npm:publishTime"]

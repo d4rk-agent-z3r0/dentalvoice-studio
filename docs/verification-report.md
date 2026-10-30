@@ -103,6 +103,7 @@ Added after the build spec was revised to make licensing a dedicated workstream.
 | | Committed inventory missing a package (simulated unregenerated change) | exit 1; report names the package and the stale file |
 | | Policy with the MPL review removed and ISC dropped | exit 1; 45 packages listed with reasons |
 | | `actionlint` on both workflows | clean |
+| `fix(legal)` | Fresh-clone `make verify` caught frontend SBOM drift: cdxgen registry stats (`versionCount`, `lastModifiedTime`) change when a package publishes any version | Only version-pinned `cdx:npm:*` properties kept; maintainer/publisher emails dropped. Fresh clone vs main repo: all 4 outputs byte-identical; 0 email addresses in outputs; SBOMs schema-valid |
 | | `make verify` (now includes `license-check`) | exit 0 |
 
 **Not yet verified:** the Licences and CI workflows on GitHub Actions. They run after the first

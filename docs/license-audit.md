@@ -17,8 +17,11 @@
 | Ambiguous metadata | Bundled licence files read by hand (httpx, uvloop, colorama) | `overrides` in the policy, with evidence |
 | Container images | Reviewed by hand | `container_images` in the policy |
 
-Reproducibility: four consecutive `python3 scripts/compliance.py generate` runs produced
-byte-identical outputs. Both SBOMs validate against the CycloneDX 1.6 JSON schema
+Reproducibility: four consecutive `python3 scripts/compliance.py generate` runs, plus a run in a
+separate fresh clone, produced byte-identical outputs. Registry-derived package statistics that
+change over time (version counts, last-modified times, release cadence) are excluded, and so
+are maintainer and publisher names and emails: third-party personal data an inventory does not
+need. Both SBOMs validate against the CycloneDX 1.6 JSON schema
 (cyclonedx-python-lib strict validator).
 
 ## 2. Results
