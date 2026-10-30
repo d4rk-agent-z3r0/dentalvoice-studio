@@ -1,14 +1,23 @@
 # Project Eligibility & Data Boundaries
 
-DentalVoice Studio is an independently authored engineering portfolio project by Siddharth Majhi.
-It is **not** a production healthcare platform.
+DentalVoice Studio is an independently owned engineering portfolio project by Siddharth Majhi,
+developed with AI assistance (Claude, Anthropic) under his direction. It is **not** a production
+healthcare platform.
 
 ## Ownership statement
 
-- Written from scratch for this repository.
+- Created in a new, empty repository for this project. Every non-original file (framework
+  templates, generated lockfiles, licence text) is listed in
+  [docs/ownership-and-provenance.md](docs/ownership-and-provenance.md).
 - Contains **no** code, data, designs, documents or credentials belonging to any employer, client,
-  university, or any party bound by a non-disclosure agreement.
-- Third-party software is used only through public packages under their published licences.
+  university, or any party bound by a non-disclosure agreement. The owner has confirmed that his
+  employment agreement does not claim this project.
+- AI-assisted commits are marked with `Co-Authored-By` trailers. Open questions about the status of
+  AI-generated material are tracked as *requires manual review* in the provenance document, not
+  asserted away.
+- Third-party software is used only through public packages under their published licences, as
+  inventoried in `THIRD_PARTY_NOTICES.md`.
+- Released under the [MIT License](LICENSE), as approved by the owner.
 
 ## Data boundaries (enforced, not aspirational)
 
