@@ -1,0 +1,125 @@
+{
+  "_comment": "Dependency licence policy for DentalVoice Studio (project licence: MIT). Edited by hand; see docs/license-audit.md. Licences are SPDX identifiers.",
+  "allowed": {
+    "MIT": "Keep copyright and permission notice.",
+    "MIT-0": "No attribution required.",
+    "0BSD": "No attribution required.",
+    "ISC": "Keep copyright and permission notice.",
+    "BSD-2-Clause": "Keep copyright notice, conditions and disclaimer.",
+    "BSD-3-Clause": "Keep copyright notice, conditions and disclaimer; no endorsement using contributors' names.",
+    "Apache-2.0": "Keep licence and any NOTICE file content; state changes to modified files.",
+    "PSF-2.0": "Keep the PSF licence and copyright notice.",
+    "Python-2.0": "Keep the Python licence and copyright notice.",
+    "BlueOak-1.0.0": "Keep the licence text or a link to it.",
+    "CC0-1.0": "Public-domain dedication; no obligations."
+  },
+  "conditional": {
+    "MPL-2.0": "Weak (file-level) copyleft. Compatible when used as an unmodified dependency; any modified MPL-covered file must stay under MPL-2.0 with its source available.",
+    "LGPL-3.0-or-later": "Weak copyleft. Compatible when dynamically linked and unmodified. Anyone who distributes a binary or image containing it must provide the licence text and the library's source (or an offer), and allow it to be replaced.",
+    "CC-BY-4.0": "Attribution licence for data. Credit the source when redistributing the data."
+  },
+  "disallowed": [
+    "GPL-2.0-only",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "SSPL-1.0",
+    "BUSL-1.1",
+    "Elastic-2.0",
+    "CC-BY-NC-4.0",
+    "CC-BY-NC-SA-4.0",
+    "CC-BY-SA-4.0",
+    "Commons-Clause"
+  ],
+  "normalize": {
+    "MIT License": "MIT",
+    "Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0",
+    "Apache Software License": "Apache-2.0",
+    "Apache License 2.0": "Apache-2.0"
+  },
+  "overrides": [
+    {
+      "ecosystem": "python",
+      "name": "httpx",
+      "declared": "BSD License",
+      "concluded": "BSD-3-Clause",
+      "evidence": "Bundled httpx-0.28.1.dist-info/licenses/LICENSE.md is the BSD 3-clause text (Encode OSS Ltd); checked 2026-10-30."
+    },
+    {
+      "ecosystem": "python",
+      "name": "uvloop",
+      "declared": "Apache Software License; MIT License",
+      "concluded": "MIT OR Apache-2.0",
+      "evidence": "uvloop-0.23.0 ships LICENSE-MIT and LICENSE-APACHE (dual licence); checked 2026-10-30."
+    },
+    {
+      "ecosystem": "python",
+      "name": "colorama",
+      "declared": "BSD License",
+      "concluded": "BSD-3-Clause",
+      "evidence": "Windows-only transitive dependency, not installed on Linux. colorama-0.4.6 wheel LICENSE.txt is the BSD 3-clause text (Jonathan Hartley); checked 2026-10-30."
+    }
+  ],
+  "reviewed": [
+    {
+      "ecosystem": "python",
+      "names": ["certifi", "pathspec"],
+      "license": "MPL-2.0",
+      "decision": "accepted",
+      "rationale": "Development-only (pulled in by httpx test client and mypy); unmodified; not in the runtime image."
+    },
+    {
+      "ecosystem": "npm",
+      "names": ["axe-core", "lightningcss", "lightningcss-*"],
+      "license": "MPL-2.0",
+      "decision": "accepted",
+      "rationale": "Build/test tooling (Tailwind CSS compiler, accessibility checks); unmodified; not in the runtime image."
+    },
+    {
+      "ecosystem": "npm",
+      "names": ["@img/sharp-libvips-*", "@img/sharp-wasm32", "@img/sharp-win32-*"],
+      "license": "LGPL-3.0-or-later",
+      "decision": "accepted-with-obligations",
+      "rationale": "Optional dependency of next via sharp (image optimisation; unused by the app). Unmodified, dynamically loaded. Ships in the frontend Docker image: anyone distributing that image must meet the LGPL obligations. The repository distributes source only. Owner may later drop sharp (see docs/license-audit.md)."
+    },
+    {
+      "ecosystem": "npm",
+      "names": ["caniuse-lite"],
+      "license": "CC-BY-4.0",
+      "decision": "accepted-with-obligations",
+      "rationale": "Browser-support data used by the build toolchain; attribution to caniuse.com/Can I Use is recorded in THIRD_PARTY_NOTICES.md."
+    }
+  ],
+  "container_images": [
+    {
+      "image": "python:3.13-slim",
+      "used_in": "backend runtime and build stages",
+      "license": "Python: PSF-2.0; Debian base: mixed OS package licences incl. GPL",
+      "source": "https://hub.docker.com/_/python",
+      "notes": "Referenced, not redistributed by this repository. Publishing a built image passes on the OS packages' obligations."
+    },
+    {
+      "image": "node:22-alpine",
+      "used_in": "frontend runtime and build stages",
+      "license": "Node.js: MIT; Alpine base: mixed OS package licences incl. GPL (BusyBox, musl MIT)",
+      "source": "https://hub.docker.com/_/node",
+      "notes": "Referenced, not redistributed by this repository."
+    },
+    {
+      "image": "postgres:16-alpine",
+      "used_in": "local database service and CI",
+      "license": "PostgreSQL License; Alpine base: mixed OS package licences",
+      "source": "https://hub.docker.com/_/postgres",
+      "notes": "Run unmodified as a separate service."
+    },
+    {
+      "image": "ghcr.io/astral-sh/uv:0.11.32",
+      "used_in": "backend build stage only (uv binary not in runtime image)",
+      "license": "MIT OR Apache-2.0",
+      "source": "https://github.com/astral-sh/uv",
+      "notes": "Build tool."
+    }
+  ]
+}

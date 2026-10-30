@@ -49,7 +49,7 @@ def header_lines(path: Path) -> list[str] | None:
 
 def eligible_files(root: Path) -> list[Path]:
     tracked = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],  # noqa: S607
         cwd=root,
         check=True,
         capture_output=True,

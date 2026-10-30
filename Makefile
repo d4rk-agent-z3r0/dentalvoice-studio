@@ -12,7 +12,10 @@ FRONTEND := frontend
 # Docker Compose and the backend Settings read .env themselves; test-integration reads one key.
 ENV_FILE := .env
 
-.PHONY: help install up down lint typecheck test test-integration test-e2e verify
+.PHONY: help install up down lint typecheck test test-integration test-e2e verify compliance
+
+compliance: ## Regenerate SBOMs, licence inventory and THIRD_PARTY_NOTICES.md
+	python3 scripts/compliance.py generate
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -29,11 +32,12 @@ down: ## Stop the stack (keeps the database volume)
 
 lint: ## SPDX headers, Ruff (lint + format check) and ESLint
 	python3 scripts/add_spdx_headers.py --check
-	cd $(BACKEND) && uv run ruff check . && uv run ruff format --check .
+	cd $(BACKEND) && uv run ruff check --config pyproject.toml . ../scripts
+	cd $(BACKEND) && uv run ruff format --config pyproject.toml --check . ../scripts
 	cd $(FRONTEND) && pnpm lint
 
 typecheck: ## mypy --strict and tsc --noEmit
-	cd $(BACKEND) && uv run mypy
+	cd $(BACKEND) && uv run mypy && uv run mypy --strict ../scripts
 	cd $(FRONTEND) && pnpm typecheck
 
 test: ## Backend unit/contract tests and frontend unit tests

@@ -61,7 +61,18 @@ Copyright (c) 2026 Siddharth Majhi. The project's original code is released unde
 [MIT License](LICENSE) (`SPDX-License-Identifier: MIT`).
 
 The MIT licence applies only to this project's original material. Third-party packages, tools and
-container images keep their own licences and are not relicensed here.
+container images keep their own licences and are not relicensed here:
+
+| Resource | Contents |
+|---|---|
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Every dependency with its licence, scope and attribution notices |
+| [compliance/sbom/](compliance/sbom/) | CycloneDX 1.6 SBOMs for backend and frontend |
+| [docs/license-audit.md](docs/license-audit.md) | Audit results and open items |
+| [docs/ownership-and-provenance.md](docs/ownership-and-provenance.md) | Ownership, AI-assisted authorship, asset inventory, contributor policy |
+
+One runtime dependency has extra obligations: Next.js optionally bundles **libvips**
+(LGPL-3.0-or-later), which ends up in the frontend container image. Anyone distributing that image
+must meet the LGPL terms (see the audit).
 
 ### External services
 
