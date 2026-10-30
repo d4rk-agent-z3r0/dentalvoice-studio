@@ -5,9 +5,10 @@ SHELL := /bin/bash
 BACKEND := backend
 FRONTEND := frontend
 
-# Load local settings (git-ignored) so targets see TEST_DATABASE_URL etc.
--include .env
-export
+# .env is deliberately NOT included here: Make would parse it as Make syntax (mangling '#', quotes
+# and '$'), override the caller's environment, and export secrets to every child process.
+# Docker Compose and the backend Settings read .env themselves; test-integration reads one key.
+ENV_FILE := .env
 
 .PHONY: help install up down lint typecheck test test-integration test-e2e verify
 
@@ -36,9 +37,10 @@ test: ## Backend unit/contract tests and frontend unit tests
 	cd $(BACKEND) && uv run pytest -m "not integration"
 	cd $(FRONTEND) && pnpm test
 
-test-integration: ## Backend integration tests against PostgreSQL (needs TEST_DATABASE_URL)
-	@test -n "$${TEST_DATABASE_URL:-}" || { echo "TEST_DATABASE_URL is not set"; exit 1; }
-	cd $(BACKEND) && uv run pytest -m integration
+test-integration: ## Backend integration tests against PostgreSQL (TEST_DATABASE_URL from env, else .env)
+	@url="$${TEST_DATABASE_URL:-$$(sed -n 's/^TEST_DATABASE_URL=//p' $(ENV_FILE) 2>/dev/null | tail -n 1)}"; \
+	test -n "$$url" || { echo "TEST_DATABASE_URL is not set (environment or $(ENV_FILE))"; exit 1; }; \
+	cd $(BACKEND) && TEST_DATABASE_URL="$$url" uv run pytest -m integration
 
 test-e2e: ## Playwright end-to-end suite (added in Milestone 10)
 	@echo "No end-to-end suite exists yet (planned for Milestone 10)."; exit 1

@@ -3,13 +3,14 @@
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any
 
 import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import PostgresDsn
 
-from app.core.config import Environment, Settings
+from app.core.config import Environment, ProviderMode, Settings
 from app.main import create_app
 
 # Port 1 on loopback is never a PostgreSQL server: connections are refused immediately.
@@ -32,13 +33,23 @@ def client_factory() -> ClientFactory:
     return _running_client
 
 
+def make_test_settings(database_url: str, **overrides: Any) -> Settings:
+    """Settings isolated from any .env file; explicit init values also beat stray env vars."""
+    values: dict[str, Any] = {
+        "environment": Environment.TEST,
+        "database_url": PostgresDsn(database_url),
+        "voice_provider_mode": ProviderMode.MOCK,
+        "log_level": "INFO",
+        "cors_origins": ["http://localhost:3000"],
+        "db_connect_timeout_seconds": 1.0,
+        **overrides,
+    }
+    return Settings(_env_file=None, **values)
+
+
 @pytest.fixture
 def offline_settings() -> Settings:
-    return Settings(
-        environment=Environment.TEST,
-        database_url=PostgresDsn(UNREACHABLE_DATABASE_URL),
-        db_connect_timeout_seconds=1.0,
-    )
+    return make_test_settings(UNREACHABLE_DATABASE_URL)
 
 
 @pytest.fixture
@@ -46,4 +57,4 @@ def database_settings() -> Settings:
     url = os.environ.get("TEST_DATABASE_URL")
     if not url:
         pytest.fail("TEST_DATABASE_URL must be set to run integration tests (see Makefile).")
-    return Settings(environment=Environment.TEST, database_url=PostgresDsn(url))
+    return make_test_settings(url, db_connect_timeout_seconds=3.0)
