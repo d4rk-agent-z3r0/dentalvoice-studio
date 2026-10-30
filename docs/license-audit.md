@@ -61,7 +61,7 @@ Reviewed conditional licences:
 | No third-party copyright notices removed | Verified | No third-party files are vendored. The removed template favicon was a brand asset, not a notice. |
 | No unknown licence silently treated as permissive | Verified | The classifier treats missing or unrecognised licences as `unknown` (requires review), never as allowed |
 | SBOM generated | Verified | `compliance/sbom/backend.cdx.json`, `compliance/sbom/frontend.cdx.json` |
-| Dependency licence scan runs in CI | Requires manual review | Added in the next commit (`ci(legal)`); not yet run on GitHub |
+| Dependency licence scan runs in CI | Verified locally; GitHub run pending | `.github/workflows/licenses.yml` runs `scripts/compliance.py check`; `make license-check` is part of `make verify`. Not yet run on GitHub Actions. |
 | No employer or client material | Verified (owner-confirmed) | `docs/ownership-and-provenance.md` §1 |
 | Project ownership documented | Verified | `docs/ownership-and-provenance.md` |
 | Licence history recorded | Verified | `docs/licensing-policy.md`, including the unapproved MIT metadata in `176b349` |
@@ -79,8 +79,14 @@ Reviewed conditional licences:
 ## 5. Regenerating
 
 ```bash
-make compliance        # regenerates SBOMs, inventory and THIRD_PARTY_NOTICES.md
+make compliance        # regenerate SBOMs, inventory and THIRD_PARTY_NOTICES.md after a dependency change
+make license-check     # what CI runs: exit 1 on policy violations or unregenerated changes
 ```
+
+`check` fails when: a licence is disallowed; a conditional licence has no recorded review; a
+licence is unknown or not machine-readable (never assumed permissive); dependencies differ from the
+committed inventory; or any generated file is out of date. Resolve violations with an evidence-backed
+`overrides` or `reviewed` entry in `compliance/license-policy.json`, or by removing the dependency.
 
 Requires `uv`, `pnpm` and installed dependencies (`make install`). Tool versions are pinned in
 `scripts/compliance.py`.

@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
+name: Licences
+
+# Regenerates the dependency inventory and SBOMs from the lockfiles and compares them with the
+# committed copies. Fails on licences the policy disallows or has not reviewed (unknown licences
+# included), and on dependency changes whose inventory was not regenerated and reviewed.
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: licences-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  licence-check:
+    name: Dependency licences and SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: |
+          (cd backend && uv sync --frozen)
+          (cd frontend && pnpm install --frozen-lockfile)
+      - name: Licence policy, inventory drift and SBOM check
+        run: python3 scripts/compliance.py check --report license-report.md
+      - name: Publish report to the job summary
+        if: always()
+        run: |
+          if [ -f license-report.md ]; then cat license-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: licence-report-and-sbom
+          path: |
+            license-report.md
+            compliance/sbom/*.cdx.json
+            compliance/licenses/inventory.json
+          if-no-files-found: warn

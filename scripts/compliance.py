@@ -3,6 +3,9 @@
 """Dependency licence inventory and SBOM generation.
 
     python3 scripts/compliance.py generate   # rewrite compliance/ and THIRD_PARTY_NOTICES.md
+    python3 scripts/compliance.py check [--report FILE]
+        # regenerate in memory; exit 1 on policy violations, dependency changes not yet
+        # reflected in the committed inventory, or stale generated files
 
 Outputs are normalised (no timestamps, serial numbers or absolute paths, stable ordering) so that
 regenerating from the same lockfiles gives byte-identical files.
@@ -82,11 +85,6 @@ def pep503(name: str) -> str:
 def load_policy() -> dict[str, Any]:
     policy: dict[str, Any] = json.loads(POLICY_FILE.read_text())
     return policy
-
-
-def write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
 
 # --------------------------------------------------------------------------- classification
@@ -440,26 +438,166 @@ def render_notices(deps: list[Dependency], policy: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def generate() -> int:
-    policy = load_policy()
+# --------------------------------------------------------------------------- policy enforcement
+
+BLOCKING_CATEGORIES = ("conditional-unreviewed", "disallowed", "unknown")
+
+
+@dataclass(frozen=True)
+class InventoryDiff:
+    added: list[str]
+    removed: list[str]
+    changed: list[str]
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.added or self.removed or self.changed)
+
+
+def violations(deps: list[Dependency]) -> list[Dependency]:
+    """Dependencies the policy does not allow to merge without a human decision."""
+    return [d for d in deps if d.category in BLOCKING_CATEGORIES]
+
+
+def diff_inventories(committed: list[Dependency], fresh: list[Dependency]) -> InventoryDiff:
+    def versions(deps: list[Dependency]) -> dict[tuple[str, str], dict[str, Dependency]]:
+        index: dict[tuple[str, str], dict[str, Dependency]] = {}
+        for dep in deps:
+            index.setdefault((dep.ecosystem, dep.name), {})[dep.version] = dep
+        return index
+
+    old, new = versions(committed), versions(fresh)
+    added, removed, changed = [], [], []
+    for key in sorted(new.keys() - old.keys()):
+        added.append(f"{key[0]} {key[1]} {', '.join(sorted(new[key]))}")
+    for key in sorted(old.keys() - new.keys()):
+        removed.append(f"{key[0]} {key[1]} {', '.join(sorted(old[key]))}")
+    for key in sorted(old.keys() & new.keys()):
+        before, after = old[key], new[key]
+        if set(before) != set(after):
+            changed.append(
+                f"{key[0]} {key[1]} {', '.join(sorted(before))} -> {', '.join(sorted(after))}"
+            )
+            continue
+        for version in sorted(before):
+            if before[version].concluded != after[version].concluded:
+                changed.append(
+                    f"{key[0]} {key[1]} {version}: licence "
+                    f"{before[version].concluded} -> {after[version].concluded}"
+                )
+    return InventoryDiff(added=added, removed=removed, changed=changed)
+
+
+# --------------------------------------------------------------------------- commands
+
+
+def json_text(data: Any) -> str:
+    return json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def build_outputs(policy: dict[str, Any]) -> tuple[list[Dependency], dict[Path, str]]:
     backend_sbom = normalise_sbom(python_sbom())
     frontend_raw = npm_sbom()
     deps = python_inventory(policy) + npm_inventory(policy, frontend_raw)
-    write_json(SBOM_DIR / "backend.cdx.json", backend_sbom)
-    write_json(SBOM_DIR / "frontend.cdx.json", normalise_sbom(frontend_raw))
-    write_json(INVENTORY_FILE, [asdict(d) for d in deps])
-    NOTICES_FILE.write_text(render_notices(deps, policy))
-    by_category: dict[str, int] = {}
+    outputs = {
+        SBOM_DIR / "backend.cdx.json": json_text(backend_sbom),
+        SBOM_DIR / "frontend.cdx.json": json_text(normalise_sbom(frontend_raw)),
+        INVENTORY_FILE: json_text([asdict(d) for d in deps]),
+        NOTICES_FILE: render_notices(deps, policy),
+    }
+    return deps, outputs
+
+
+def category_counts(deps: list[Dependency]) -> dict[str, int]:
+    counts: dict[str, int] = {}
     for dep in deps:
-        by_category[dep.category] = by_category.get(dep.category, 0) + 1
-    print(f"inventory: {len(deps)} packages {by_category}")
+        counts[dep.category] = counts.get(dep.category, 0) + 1
+    return counts
+
+
+def generate() -> int:
+    deps, outputs = build_outputs(load_policy())
+    for path, text in outputs.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    print(f"inventory: {len(deps)} packages {category_counts(deps)}")
+    blocking = violations(deps)
+    for dep in blocking:
+        print(
+            f"needs review: {dep.ecosystem} {dep.name} {dep.version} {dep.concluded!r}: {dep.note}"
+        )
     return 0
 
 
+def render_report(
+    deps: list[Dependency], blocking: list[Dependency], diff: InventoryDiff, stale: list[str]
+) -> str:
+    lines = ["# Dependency licence check", "", "| Category | Packages |", "|---|---|"]
+    lines += [f"| {k} | {v} |" for k, v in sorted(category_counts(deps).items())]
+    lines += ["", "## Policy violations", ""]
+    if blocking:
+        lines += [
+            "| Ecosystem | Package | Version | Licence | Scope | Why |",
+            "|---|---|---|---|---|---|",
+        ]
+        lines += [
+            f"| {d.ecosystem} | {d.name} | {d.version} | {d.concluded or '(none)'} | {d.scope} "
+            f"| {d.category}: {d.note} |"
+            for d in blocking
+        ]
+        lines += [
+            "",
+            "Resolve each by recording evidence in `compliance/license-policy.json` (an "
+            "`overrides` entry for mis-declared metadata, or a `reviewed` entry for a conditional "
+            "licence), or by removing the dependency. Unknown licences are never assumed "
+            "permissive.",
+        ]
+    else:
+        lines.append("None.")
+    lines += ["", "## Dependency changes since the committed inventory", ""]
+    if diff.is_empty:
+        lines.append("None.")
+    for title, items in (
+        ("Added", diff.added),
+        ("Removed", diff.removed),
+        ("Changed", diff.changed),
+    ):
+        if items:
+            lines += [f"**{title}**", ""] + [f"- {item}" for item in items] + [""]
+    lines += ["", "## Out-of-date generated files", ""]
+    lines += [f"- `{path}`" for path in stale] or ["None."]
+    if stale:
+        lines += ["", "Run `make compliance` and commit the regenerated files after review."]
+    return "\n".join(lines) + "\n"
+
+
+def check(report_path: Path | None) -> int:
+    policy = load_policy()
+    deps, outputs = build_outputs(policy)
+    committed_raw = json.loads(INVENTORY_FILE.read_text()) if INVENTORY_FILE.exists() else []
+    committed = [Dependency(**item) for item in committed_raw]
+    diff = diff_inventories(committed, deps)
+    stale = [
+        str(path.relative_to(ROOT))
+        for path, text in outputs.items()
+        if not path.exists() or path.read_text() != text
+    ]
+    blocking = violations(deps)
+    report = render_report(deps, blocking, diff, stale)
+    if report_path is not None:
+        report_path.write_text(report)
+    print(report)
+    return 1 if (blocking or stale or not diff.is_empty) else 0
+
+
 def main() -> int:
-    command = sys.argv[1] if len(sys.argv) > 1 else ""
+    args = sys.argv[1:]
+    command = args[0] if args else ""
     if command == "generate":
         return generate()
+    if command == "check":
+        report = Path(args[args.index("--report") + 1]) if "--report" in args else None
+        return check(report)
     print(__doc__)
     return 2
 

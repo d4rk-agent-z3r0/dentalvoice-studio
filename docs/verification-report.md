@@ -81,3 +81,29 @@ An independent read-only review agent audited commits `176b349..aae2e39`; a fres
 | CI would run Python 3.12 while docs/image use 3.13 | Low | `backend/.python-version` = 3.13 (honoured by uv and setup-uv) | `uv run python --version` → 3.13.18 |
 | Container logs plain text | Medium | as above + `--no-access-log` in image | recreated stack: 0 non-JSON backend log lines |
 | Redaction exact-match, top level only | Medium | word-part + substring matching, recursive into mappings/sequences; `prompt_tokens` stays visible | 11 sensitive + 4 preserved key cases, nested case |
+
+## Licensing and ownership milestone
+
+Added after the build spec was revised to make licensing a dedicated workstream. Owner decisions
+(2026-10-30): MIT licence, copyright `Siddharth Majhi`, employer IP owner-confirmed.
+
+| Commit | Check | Result |
+|---|---|---|
+| `chore(license)` | `LICENSE` vs SPDX License List v6.12.0 MIT text (word diff) | only the holder and year differ |
+| | `scripts/add_spdx_headers.py --check` | 0 eligible files missing a header; idempotent (second run adds 0) |
+| | `docker build --check` on both Dockerfiles (header below `# syntax=`) | no warnings |
+| `docs(legal)` provenance | Anthropic Consumer Terms §4 (effective 2025-10-08) checked 2026-10-30 | output-rights assignment recorded; copyrightability flagged for review |
+| `docs(legal)` inventory | `python3 scripts/compliance.py generate` | 582 packages: 540 allowed, 42 conditional-reviewed, 0 unknown or disallowed |
+| | Reproducibility (4 runs) | byte-identical outputs |
+| | CycloneDX 1.6 strict schema validation | backend and frontend SBOMs valid |
+| | Ambiguous metadata (httpx, uvloop, colorama) | resolved by reading bundled licence files |
+| | libvips in the frontend image | `libvips-cpp.so` present under `/app/node_modules`; recorded as LGPL accepted-with-obligations |
+| `ci(legal)` | `scripts/tests` (17 tests: classification, review matching, overrides, inventory diff, SBOM normalisation) | 17 passed; seen failing before implementation (import error) |
+| | `compliance.py check` on a clean tree | exit 0 |
+| | Committed inventory missing a package (simulated unregenerated change) | exit 1; report names the package and the stale file |
+| | Policy with the MPL review removed and ISC dropped | exit 1; 45 packages listed with reasons |
+| | `actionlint` on both workflows | clean |
+| | `make verify` (now includes `license-check`) | exit 0 |
+
+**Not yet verified:** the Licences and CI workflows on GitHub Actions. They run after the first
+push.

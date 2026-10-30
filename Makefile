@@ -12,10 +12,7 @@ FRONTEND := frontend
 # Docker Compose and the backend Settings read .env themselves; test-integration reads one key.
 ENV_FILE := .env
 
-.PHONY: help install up down lint typecheck test test-integration test-e2e verify compliance
-
-compliance: ## Regenerate SBOMs, licence inventory and THIRD_PARTY_NOTICES.md
-	python3 scripts/compliance.py generate
+.PHONY: help install up down lint typecheck test test-integration test-e2e verify compliance license-check
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -40,8 +37,9 @@ typecheck: ## mypy --strict and tsc --noEmit
 	cd $(BACKEND) && uv run mypy && uv run mypy --strict ../scripts
 	cd $(FRONTEND) && pnpm typecheck
 
-test: ## Backend unit/contract tests and frontend unit tests
+test: ## Backend unit/contract tests, tooling tests and frontend unit tests
 	cd $(BACKEND) && uv run pytest -m "not integration"
+	cd $(BACKEND) && uv run pytest ../scripts/tests
 	cd $(FRONTEND) && pnpm test
 
 test-integration: ## Backend integration tests against PostgreSQL (TEST_DATABASE_URL from env, else .env)
@@ -52,5 +50,11 @@ test-integration: ## Backend integration tests against PostgreSQL (TEST_DATABASE
 test-e2e: ## Playwright end-to-end suite (added in Milestone 10)
 	@echo "No end-to-end suite exists yet (planned for Milestone 10)."; exit 1
 
-verify: lint typecheck test test-integration ## All gates that currently exist; non-zero on any failure
+compliance: ## Regenerate SBOMs, licence inventory and THIRD_PARTY_NOTICES.md
+	python3 scripts/compliance.py generate
+
+license-check: ## Fail on licence policy violations or out-of-date inventory/SBOMs
+	python3 scripts/compliance.py check
+
+verify: lint typecheck test test-integration license-check ## All gates that currently exist; non-zero on any failure
 	@echo "verify: all gates passed"
