@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
 
 FROM python:3.13-slim AS build

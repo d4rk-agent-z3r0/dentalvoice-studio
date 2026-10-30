@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Siddharth Majhi
+// SPDX-License-Identifier: MIT
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 

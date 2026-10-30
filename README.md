@@ -53,3 +53,23 @@ make verify                   # lint, types, unit + integration tests
 | [docs/testing-strategy.md](docs/testing-strategy.md) | Test layers and quality gates |
 | [docs/implementation-plan.md](docs/implementation-plan.md) | Milestones and Git strategy |
 | [docs/decisions/](docs/decisions/) | Architecture decision records |
+| [docs/licensing-policy.md](docs/licensing-policy.md) | Project licence, source-file marking, licence history |
+
+## Licence
+
+Copyright (c) 2026 Siddharth Majhi. The project's original code is released under the
+[MIT License](LICENSE) (`SPDX-License-Identifier: MIT`).
+
+The MIT licence applies only to this project's original material. Third-party packages, tools and
+container images keep their own licences and are not relicensed here.
+
+### External services
+
+The live mode calls third-party APIs that are **not** part of this repository and are governed by
+their providers' own terms. You need your own accounts and API keys to use them; mock mode needs
+neither.
+
+| Service | Used for | Terms |
+|---|---|---|
+| Deepgram (streaming STT, Aura TTS) | Speech recognition and receptionist voice | Deepgram's terms of service |
+| Google Gemini API | Receptionist reasoning and structured extraction | Google's Gemini API terms |

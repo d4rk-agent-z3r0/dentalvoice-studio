@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 from app.core.config import Settings
 from tests.conftest import ClientFactory
 

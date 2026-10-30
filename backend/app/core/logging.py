@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 """Structured JSON logging with request/conversation correlation and redaction.
 
 Both structlog events and stdlib records (uvicorn, SQLAlchemy, asyncpg) go through the same

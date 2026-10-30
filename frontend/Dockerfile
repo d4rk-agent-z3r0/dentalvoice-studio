@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 FROM node:22-alpine AS base
 ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH" NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable

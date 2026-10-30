@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 """FastAPI application factory.
 
 Run with: ``uvicorn app.main:create_app --factory``. Nothing is built at import time, so importing

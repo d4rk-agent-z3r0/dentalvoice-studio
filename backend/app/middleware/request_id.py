@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 """Pure-ASGI request ID middleware (HTTP and WebSocket scopes).
 
 Responsibilities:

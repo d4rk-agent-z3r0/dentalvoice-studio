@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
@@ -25,7 +27,8 @@ up: ## Build and start db, backend and frontend; waits until all are healthy
 down: ## Stop the stack (keeps the database volume)
 	docker compose down
 
-lint: ## Ruff (lint + format check) and ESLint
+lint: ## SPDX headers, Ruff (lint + format check) and ESLint
+	python3 scripts/add_spdx_headers.py --check
 	cd $(BACKEND) && uv run ruff check . && uv run ruff format --check .
 	cd $(FRONTEND) && pnpm lint
 

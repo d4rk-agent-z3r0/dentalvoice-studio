@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 """Async SQLAlchemy engine and session factory."""
 
 from sqlalchemy import text

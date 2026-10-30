@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 name: CI
 
 on:
@@ -45,6 +47,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
       - run: uv sync --frozen
+      - name: SPDX headers on original source files
+        run: python3 ../scripts/add_spdx_headers.py --check
       - name: Ruff
         run: uv run ruff check . && uv run ruff format --check .
       - name: mypy (strict)

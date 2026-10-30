@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Siddharth Majhi
+// SPDX-License-Identifier: MIT
 import type { Metadata } from "next";
 import "./globals.css";
 import { DemoBanner } from "@/components/DemoBanner";

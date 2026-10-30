@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Siddharth Majhi
+// SPDX-License-Identifier: MIT
 export const DEMO_NOTICE = "DEMO ENVIRONMENT — ALL PATIENTS AND CONVERSATIONS ARE SYNTHETIC.";
 
 /** Persistent, non-dismissable notice required on every page. */

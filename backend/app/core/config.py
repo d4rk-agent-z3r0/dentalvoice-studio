@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 """Application settings, loaded once from the environment."""
 
 from enum import StrEnum

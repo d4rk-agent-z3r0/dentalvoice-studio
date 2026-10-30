@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Siddharth Majhi
+// SPDX-License-Identifier: MIT
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";

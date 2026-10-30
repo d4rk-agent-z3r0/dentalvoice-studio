@@ -1,10 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Siddharth Majhi
+# SPDX-License-Identifier: MIT
 [project]
 name = "dentalvoice-backend"
 version = "0.1.0"
 description = "DentalVoice Studio backend — synthetic AI voice patient onboarding simulator"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"  # SPDX expression (PEP 639); approved by the owner 2026-10-30
 authors = [{ name = "Siddharth Majhi" }]
 dependencies = [
     "fastapi>=0.162,<0.200",

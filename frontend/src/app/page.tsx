@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Siddharth Majhi
+// SPDX-License-Identifier: MIT
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-6 py-16">
