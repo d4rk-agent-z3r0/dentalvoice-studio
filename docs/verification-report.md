@@ -55,9 +55,9 @@ build secret; on a normal machine `make up` needs neither.
 | Compose password guard | same, with no password | exits 1 with "set POSTGRES_PASSWORD in .env" |
 | Job commands | identical to `make lint`, `make typecheck`, `make test`, `make test-integration`, image builds | all pass locally (sections above) |
 
-**Not yet verified:** an actual GitHub Actions run. That requires pushing to a remote, which waits
-for explicit approval. Action versions are pinned to tags confirmed to exist (`checkout@v5`,
-`setup-node@v5`, `setup-uv@v8.2.0`, `pnpm/action-setup@v4`); Dependabot keeps them current.
+**GitHub Actions:** verified after the owner-approved first push (see "First GitHub Actions run"
+below). Action versions are pinned to tags confirmed to exist (`checkout@v5`, `setup-node@v5`,
+`setup-uv@v8.2.0`, `pnpm/action-setup@v4`); Dependabot keeps them current.
 
 ### Milestone 1 review fixes
 
@@ -106,5 +106,19 @@ Added after the build spec was revised to make licensing a dedicated workstream.
 | `fix(legal)` | Fresh-clone `make verify` caught frontend SBOM drift: cdxgen registry stats (`versionCount`, `lastModifiedTime`) change when a package publishes any version | Only version-pinned `cdx:npm:*` properties kept; maintainer/publisher emails dropped. Fresh clone vs main repo: all 4 outputs byte-identical; 0 email addresses in outputs; SBOMs schema-valid |
 | | `make verify` (now includes `license-check`) | exit 0 |
 
-**Not yet verified:** the Licences and CI workflows on GitHub Actions. They run after the first
-push.
+## First GitHub Actions run
+
+Push of `5c16dbd` to `d4rk-agent-z3r0/dentalvoice-studio` (2026-10-30), owner-approved.
+
+| Workflow | Run | Job | Result |
+|---|---|---|---|
+| CI | 41050301277 | Backend (lint, types, unit, integration) | success |
+| | | Frontend (lint, types, unit, build) | success |
+| | | Container images build | success |
+| Licences | 41050301307 | Dependency licences and SBOM | success |
+
+Dependabot opened seven update PRs against the branch on first push. Six pass both workflows. The
+`node` 22 → 25 image bump (PR #7) fails the image build: `corepack enable` exits 127 because Node 25
+no longer bundles Corepack. CI caught it as intended; it is not merged. Dependabot's npm job could
+not update `react`, `react-dom` or `@types/node` because of `eslint@9.39.5` peer constraints; no PR
+was opened for those.

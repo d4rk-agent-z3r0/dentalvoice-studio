@@ -64,7 +64,7 @@ Reviewed conditional licences:
 | No third-party copyright notices removed | Verified | No third-party files are vendored. The removed template favicon was a brand asset, not a notice. |
 | No unknown licence silently treated as permissive | Verified | The classifier treats missing or unrecognised licences as `unknown` (requires review), never as allowed |
 | SBOM generated | Verified | `compliance/sbom/backend.cdx.json`, `compliance/sbom/frontend.cdx.json` |
-| Dependency licence scan runs in CI | Verified locally; GitHub run pending | `.github/workflows/licenses.yml` runs `scripts/compliance.py check`; `make license-check` is part of `make verify`. Not yet run on GitHub Actions. |
+| Dependency licence scan runs in CI | Verified | `.github/workflows/licenses.yml` runs `scripts/compliance.py check`; `make license-check` is part of `make verify`. First GitHub Actions run (41050301307) passed. |
 | No employer or client material | Verified (owner-confirmed) | `docs/ownership-and-provenance.md` §1 |
 | Project ownership documented | Verified | `docs/ownership-and-provenance.md` |
 | Licence history recorded | Verified | `docs/licensing-policy.md`, including the unapproved MIT metadata in `176b349` |
@@ -77,7 +77,6 @@ Reviewed conditional licences:
 | Copyrightability of AI-generated code | Requires manual review | Legal question; see `docs/ownership-and-provenance.md` §2 |
 | OS packages in Docker base images | Not applicable while images aren't distributed | If images are published to a registry, base-image OS package obligations (incl. GPL components) apply |
 | Synthetic patient audio | Blocked (Milestone 5) | Check the TTS provider's output and redistribution terms first |
-| Licence scan on GitHub Actions | Requires manual review | Confirm after the first push |
 
 ## 5. Regenerating
 
