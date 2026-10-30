@@ -1,45 +1,115 @@
-"""Structured JSON logging with request/conversation correlation and redaction."""
+"""Structured JSON logging with request/conversation correlation and redaction.
+
+Both structlog events and stdlib records (uvicorn, SQLAlchemy, asyncpg) go through the same
+processor chain, so every line on stdout is JSON and passes the same redaction step.
+"""
 
 import logging
-from collections.abc import MutableMapping
+import re
+import sys
+from collections.abc import Mapping, MutableMapping
 from typing import Any
 
 import structlog
 
-# Keys whose values must never reach logs. Extended as the domain grows.
-REDACTED_KEYS = frozenset(
-    {"password", "authorization", "token", "access_token", "ticket", "api_key", "email", "phone"}
-)
 REDACTED = "[REDACTED]"
+
+# A key is sensitive if any of its word parts (split on _ - . and spaces) is in this set...
+_SENSITIVE_PARTS = frozenset(
+    {
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "authorization",
+        "ticket",
+        "cookie",
+        "email",
+        "phone",
+        "dsn",
+        "credential",
+        "credentials",
+    }
+)
+# ...or its normalised form contains one of these.
+_SENSITIVE_SUBSTRINGS = ("api_key", "apikey", "database_url")
+_PART_SPLIT = re.compile(r"[_\-.\s]+")
+
+# Never emitted: prints full URLs including query strings (where WebSocket tickets travel).
+# RequestIdMiddleware logs method, path and status instead.
+_SUPPRESSED_LOGGERS = ("uvicorn.access",)
+
+
+def _is_sensitive(key: str) -> bool:
+    normalised = key.lower().replace("-", "_")
+    if any(fragment in normalised for fragment in _SENSITIVE_SUBSTRINGS):
+        return True
+    return any(part in _SENSITIVE_PARTS for part in _PART_SPLIT.split(normalised))
+
+
+def _redact(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            k: REDACTED if isinstance(k, str) and _is_sensitive(k) else _redact(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_redact(item) for item in value]
+    return value
 
 
 def redact_sensitive(
     _logger: Any, _method: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
+    """Redact sensitive keys at any depth. Free-text messages are not inspected: never put
+    sensitive values into the event string itself."""
     for key in list(event_dict):
-        if key.lower() in REDACTED_KEYS:
-            event_dict[key] = REDACTED
+        if key == "event":
+            continue
+        event_dict[key] = REDACTED if _is_sensitive(key) else _redact(event_dict[key])
     return event_dict
 
 
 def configure_logging(level: str = "INFO") -> None:
-    shared: list[structlog.types.Processor] = [
+    numeric_level = logging.getLevelNamesMapping()[level.upper()]
+    shared: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
-        redact_sensitive,
     ]
     structlog.configure(
+        processors=[*shared, structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
+        cache_logger_on_first_use=False,
+    )
+    formatter = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared,
         processors=[
-            *shared,
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            redact_sensitive,
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
-        cache_logger_on_first_use=True,
     )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(numeric_level)
+
+    # Uvicorn installs its own plain-text handlers before the app factory runs; route its loggers
+    # through the root JSON handler instead.
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        uvicorn_logger = logging.getLogger(name)
+        uvicorn_logger.handlers.clear()
+        uvicorn_logger.propagate = True
+    for name in _SUPPRESSED_LOGGERS:
+        logging.getLogger(name).disabled = True
 
 
-def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
+def get_logger(name: str) -> structlog.typing.FilteringBoundLogger:
+    logger: structlog.typing.FilteringBoundLogger = structlog.get_logger(name)
     return logger
