@@ -27,3 +27,20 @@ their actual results. Anything not listed here has not been verified.
 | ESLint | `pnpm lint` (`--max-warnings=0`) | clean |
 | tsc | `pnpm typecheck` | clean |
 | Next build | `pnpm build` | success, `/` prerendered |
+
+### `build(docker): configure local development services`
+
+| Check | Command | Result |
+|---|---|---|
+| Images build | `docker build ./backend`, `docker build ./frontend` | both succeed (non-root runtime users, uid 10001) |
+| Stack health | `docker compose up -d --wait` | db, backend, frontend all `healthy` |
+| Readiness | `curl /health/ready` | `200 {"status":"ok","database":"ok"}` with `x-request-id` header |
+| Readiness failure | `docker compose stop db` → `curl /health/ready` | `503 {"status":"unavailable","database":"unavailable"}` |
+| Recovery | `docker compose start db` → `curl /health/ready` | back to `200` without restarting backend |
+| Frontend | `curl :3000/` | page served with the synthetic-data banner |
+| Test DB init | `psql -l` in db container | `dentalvoice_test` created by `scripts/db/init` |
+| Integration vs compose DB | `pytest -m integration` with `.env` loaded | 1 passed |
+| Structured logs | `docker compose logs backend` | JSON `startup` event with `provider_mode: mock` |
+
+Note: this sandbox's network requires host-network builds plus its proxy CA via the `extra_ca`
+build secret; on a normal machine `make up` needs neither.

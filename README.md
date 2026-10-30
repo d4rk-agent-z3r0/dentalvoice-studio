@@ -15,12 +15,30 @@ This is an engineering portfolio project — not a healthcare product. See
 Under active, milestone-based development. What is verified so far is recorded with command evidence
 in [docs/verification-report.md](docs/verification-report.md).
 
-## Quick start (local, without Docker)
+## Quick start with Docker
 
-Requirements: Python ≥ 3.12 with [uv](https://docs.astral.sh/uv/), Node 22 with pnpm 10, PostgreSQL 16.
+Requirements: Docker with Compose v2.
 
 ```bash
-cp .env.example .env          # then replace the placeholder password
+cp .env.example .env          # replace "replace-with-a-local-password" (both occurrences)
+make up                       # db + backend + frontend, waits for health checks
+```
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| API health | http://localhost:8000/health/ready |
+| API docs | http://localhost:8000/docs |
+
+Behind a TLS-inspecting proxy, pass its CA as a BuildKit secret (never stored in an image layer):
+`docker build --secret id=extra_ca,src=/path/to/ca.pem ./backend` (same for `./frontend`).
+
+## Development without Docker
+
+Requirements: Python ≥ 3.12 with [uv](https://docs.astral.sh/uv/), Node 22 with pnpm 10, PostgreSQL 16
+(or just `docker compose up -d db`, which also creates the `_test` database).
+
+```bash
 make install
 make verify                   # lint, types, unit + integration tests
 ```

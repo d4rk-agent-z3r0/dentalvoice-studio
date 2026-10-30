@@ -4,9 +4,12 @@ SHELL := /bin/bash
 
 BACKEND := backend
 FRONTEND := frontend
-UV := uv run --project $(BACKEND)
 
-.PHONY: help install lint typecheck test test-integration test-e2e verify
+# Load local settings (git-ignored) so targets see TEST_DATABASE_URL etc.
+-include .env
+export
+
+.PHONY: help install up down lint typecheck test test-integration test-e2e verify
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -14,6 +17,12 @@ help: ## List targets
 install: ## Install backend and frontend dependencies from lockfiles
 	cd $(BACKEND) && uv sync --frozen
 	cd $(FRONTEND) && pnpm install --frozen-lockfile
+
+up: ## Build and start db, backend and frontend; waits until all are healthy
+	docker compose up -d --build --wait
+
+down: ## Stop the stack (keeps the database volume)
+	docker compose down
 
 lint: ## Ruff (lint + format check) and ESLint
 	cd $(BACKEND) && uv run ruff check . && uv run ruff format --check .
