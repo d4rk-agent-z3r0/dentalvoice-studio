@@ -44,3 +44,17 @@ their actual results. Anything not listed here has not been verified.
 
 Note: this sandbox's network requires host-network builds plus its proxy CA via the `extra_ca`
 build secret; on a normal machine `make up` needs neither.
+
+### `ci(github): add lint and test workflows`
+
+| Check | Command | Result |
+|---|---|---|
+| Workflow syntax & action inputs | `actionlint .github/workflows/ci.yml` (v1.7.12) | clean (shellcheck not installed, so `run:` scripts not shell-linted) |
+| CI database config | backend integration tests against `postgres:16-alpine` with `POSTGRES_HOST_AUTH_METHOD=trust`, URL without password | 1 passed |
+| Compose validation step | `docker compose config --quiet` with placeholder password | valid |
+| Compose password guard | same, with no password | exits 1 with "set POSTGRES_PASSWORD in .env" |
+| Job commands | identical to `make lint`, `make typecheck`, `make test`, `make test-integration`, image builds | all pass locally (sections above) |
+
+**Not yet verified:** an actual GitHub Actions run. That requires pushing to a remote, which waits
+for explicit approval. Action versions are pinned to tags confirmed to exist (`checkout@v5`,
+`setup-node@v5`, `setup-uv@v8.2.0`, `pnpm/action-setup@v4`); Dependabot keeps them current.
