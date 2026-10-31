@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Siddharth Majhi
 # SPDX-License-Identifier: MIT
+import re
 import uuid
 from datetime import UTC, date, datetime
 
@@ -13,6 +14,8 @@ from app.services.intake.service import IntakeChanges, IntakeService
 from tests.support.factories import ClinicGraph, build_clinic_graph
 
 pytestmark = pytest.mark.integration
+
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 F = IntakeField
 SessionFactory = async_sessionmaker[AsyncSession]
@@ -130,9 +133,12 @@ async def test_events_never_contain_field_values(
     await _apply(session_factory, graph, [(F.EMAIL, "ava@example.com"), (F.PHONE, "212-555-1234")])
     async with session_factory() as session:
         events = await EventRepository(session).list(graph.clinic_id, graph.conversation_id)
-    text = repr([e.payload for e in events])
+    # The payloads carry ids; a random UUID can contain "212" by chance, so ids are removed first.
+    text = _UUID.sub("<id>", repr([e.payload for e in events]))
     assert "ava@example.com" not in text
-    assert "212" not in text
+    assert "ava" not in text
+    for fragment in ("212", "555", "1234"):
+        assert fragment not in text
     assert {e.type for e in events} == {"field_proposed", "field_rejected"}
 
 
