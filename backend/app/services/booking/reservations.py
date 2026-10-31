@@ -13,9 +13,11 @@ Rules that make double booking impossible and retries safe:
   concurrent replay of the same request returns the original rather than an error.
 * Each method is one transaction, and a result is built only after that transaction has
   committed: nothing is reported as booked, cancelled or rescheduled before the database said so.
-* Two inserts racing on the exclusion constraint can deadlock (each waits for the other's
-  uncommitted row). PostgreSQL aborts one; that whole transaction is retried a bounded number of
-  times (``app.database.retry``), and the retry sees the committed winner, so the loser gets
+* Two inserts racing on the exclusion constraint could deadlock (each waiting for the other's
+  uncommitted row). Bookings for one dentist therefore take a transaction-scoped advisory lock
+  just before inserting, so they queue instead; the constraint still decides who wins. As a
+  safety net, a transaction PostgreSQL aborts anyway (deadlock or serialization failure) is
+  retried a bounded number of times (``app.database.retry``), and the loser still gets
   ``BOOKING_SLOT_TAKEN``, never a raw database error.
 """
 
@@ -165,6 +167,7 @@ class ReservationService:
                 await self._require_bookable(
                     session, clinic_id, old.dentist_id, starts_at, ends_at, now
                 )
+                await repository.lock_dentist_calendar(clinic_id, old.dentist_id)
                 # Release the old time first, so the new one may overlap it (e.g. 15 minutes later).
                 old.status = AppointmentStatus.RESCHEDULED
                 await session.flush()
@@ -263,6 +266,7 @@ class ReservationService:
         await self._require_bookable(
             session, clinic_id, request.dentist_id, request.starts_at, ends_at, now
         )
+        await AppointmentRepository(session).lock_dentist_calendar(clinic_id, request.dentist_id)
         appointment = Appointment(
             clinic_id=clinic_id,
             patient_id=request.patient_id,

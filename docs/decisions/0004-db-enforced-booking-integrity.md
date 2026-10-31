@@ -35,5 +35,9 @@ aborted transaction is run again in full (bounded: four attempts, with jitter). 
 committed winner, so the loser still receives `409 BOOKING_SLOT_TAKEN`; if every attempt is
 aborted, `409 CONCURRENT_UPDATE`, never a 500. (Added 2026-10-31 after the deadlock appeared in
 concurrency tests under load.)
+Retrying alone proved insufficient under heavy load: in a 20-way race all the losers could use up
+their attempts. Bookings for one dentist therefore take a transaction-scoped advisory lock
+(`pg_advisory_xact_lock`) after reading the calendar and before inserting, so they queue instead of
+deadlocking; the exclusion constraint still decides the winner. The retry stays as a safety net.
 Slots must be regenerated when schedules change (a service operation, Milestone 6). Tests must run
 against PostgreSQL.

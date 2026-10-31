@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.enums import ACTIVE_APPOINTMENT_STATUSES, AppointmentStatus
@@ -25,6 +25,17 @@ class AppointmentRepository:
             Appointment.clinic_id == clinic_id, Appointment.id == appointment_id
         )
         return await self._session.scalar(stmt)
+
+    async def lock_dentist_calendar(self, clinic_id: uuid.UUID, dentist_id: uuid.UUID) -> None:
+        """Hold a transaction-scoped lock on one dentist's calendar until commit or rollback.
+
+        Two transactions inserting overlapping appointments can each find the other's
+        uncommitted row through the exclusion constraint and wait for it: a deadlock. Taking
+        this lock first makes bookings for one dentist queue instead; the constraint still
+        decides who wins. Other dentists are not affected.
+        """
+        key = func.hashtextextended(f"appointments:{clinic_id}:{dentist_id}", 0)
+        await self._session.execute(select(func.pg_advisory_xact_lock(key)))
 
     async def get_for_update(
         self, clinic_id: uuid.UUID, appointment_id: uuid.UUID

@@ -17,6 +17,7 @@ import httpx
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from structlog.testing import capture_logs
 
 from app.core.config import Settings
 from app.domain.enums import ACTIVE_APPOINTMENT_STATUSES, AppointmentStatus, ClinicRole
@@ -116,14 +117,17 @@ async def test_twenty_concurrent_reservations_for_one_slot_book_exactly_once(
         clinic.at(DAY, 9, 15 * (i % 2) if pattern == "overlapping_starts" else 0) for i in range(N)
     ]
 
-    outcomes = await gather_outcomes(
-        [
-            service.reserve(
-                clinic.clinic_id, request_for(clinic, start), f"race-{i:02d}-{uuid.uuid4().hex}"
-            )
-            for i, start in enumerate(starts)
-        ]
-    )
+    with capture_logs() as logs:
+        outcomes = await gather_outcomes(
+            [
+                service.reserve(
+                    clinic.clinic_id,
+                    request_for(clinic, start),
+                    f"race-{i:02d}-{uuid.uuid4().hex}",
+                )
+                for i, start in enumerate(starts)
+            ]
+        )
 
     assert len(backends) == N  # N transactions open at once, each on its own connection
     wins = [o for o in outcomes if isinstance(o, Reservation)]
@@ -131,6 +135,8 @@ async def test_twenty_concurrent_reservations_for_one_slot_book_exactly_once(
     unexpected = [o for o in outcomes if not isinstance(o, Reservation | BookingSlotTakenError)]
     assert unexpected == []
     assert (len(wins), len(losses)) == (1, N - 1)
+    # Bookings for one dentist queue rather than deadlock: no transaction had to be retried.
+    assert [e for e in logs if e["event"] == "transaction_conflict"] == []
     assert wins[0].appointment.status is AppointmentStatus.CONFIRMED
     stored = await rows(session_factory, clinic.clinic_id)
     assert [(r.id, r.status) for r in stored] == [
@@ -344,14 +350,16 @@ async def test_a_deadlocked_reservation_is_retried_and_both_book(
 ) -> None:
     calls = deadlock_first_attempts()
     service = ReservationService(session_factory)
-    outcomes = await gather_outcomes(
-        [
-            service.reserve(clinic.clinic_id, request_for(clinic, start), uuid.uuid4().hex)
-            for start in (clinic.at(DAY, 9), clinic.at(DAY, 10))
-        ]
-    )
+    with capture_logs() as logs:
+        outcomes = await gather_outcomes(
+            [
+                service.reserve(clinic.clinic_id, request_for(clinic, start), uuid.uuid4().hex)
+                for start in (clinic.at(DAY, 9), clinic.at(DAY, 10))
+            ]
+        )
 
     assert all(isinstance(o, Reservation) for o in outcomes), outcomes
+    assert [e["sqlstate"] for e in logs if e["event"] == "transaction_conflict"] == ["40P01"]
     assert len(calls) == 3  # the deadlock victim ran its transaction again
     assert len(await rows(session_factory, clinic.clinic_id)) == 2
 
