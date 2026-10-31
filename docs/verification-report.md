@@ -606,3 +606,29 @@ the voice work's `Accept` parameter as well as the appointments work's extra hea
 | `fix(legal)` | `make verify` failed only because `frontend.cdx.json` was stale: cdxgen's `ImportedModules` lists the names our code imports from React and Next. The normaliser now drops that property (test added); regenerated | `make license-check` exit 0; the SBOM diff removes only those 8 properties |
 
 | Integrated branch | `make verify` (PostgreSQL 16) | exit 0: backend 524 unit/contract + 158 integration, 22 tooling, 160 frontend (15 files); Ruff, mypy `--strict` (169 files), ESLint, `tsc`, licence gate all clean |
+
+## Milestone 8 — Reply guard
+
+Run 2026-10-31 on branch `feat/m8-reply-guard` (from `feat/m8-security` at `e697451`), PostgreSQL 16
+test database `dv_test_guard`. Closes the Milestone 4 known gap: model-written reply text is now
+checked before it is stored or spoken. Rules and findings: `docs/security/reply-guard.md`.
+
+| Check | Command | Result |
+|---|---|---|
+| Tests written first | `uv run pytest -q tests/unit/test_reply_guard.py` before the module existed | collection error: `No module named 'app.orchestrators.reply_guard'` |
+| | `uv run pytest -q tests/integration/test_reply_guard_orchestration.py` with the guard written but not wired into `_reply` | 3 failed, 2 passed (the clean-reply and own-email tests pass without a guard, as they should) |
+| Unit: every rule, positives and negatives; every deterministic `compose_reply` text and the escalation message pass | `uv run pytest -q tests/unit/test_reply_guard.py` | 292 passed |
+| Integration: malicious reply → the deterministic reply is returned and stored; `reply_filtered` payload is `{"reasons": [...]}` only; a full scenario A call with a malicious reply on every turn has the same states, paths, replies, live intake, snapshot and patient as the mock run, with 6 filtered turns; a clean reply and the caller's own email pass unchanged; the warning log has reason codes and no reply text (`structlog.testing.capture_logs`) | `uv run pytest -q tests/integration/test_reply_guard_orchestration.py` | 5 passed |
+| Mutation: each of the 16 rules removed from the rule table in turn; the conditional-clause exemption removed; the `COMPLETED` allowance removed; the orchestrator ignoring the verdict; the text added to the event payload; the text added to the log | a script that edits, runs the guard tests, and restores | 21 of 21 mutants failed the tests; sources restored (`git diff` shows only the intended change) |
+| Commit gate (`set -e`) | `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`, then `python3 scripts/add_spdx_headers.py --check` | Ruff clean, 178 files formatted, mypy `--strict` 172 files clean, **979 passed** (816 unit/contract + 163 integration), SPDX clean |
+
+Seen during the gate: two earlier full runs, while other sessions were loading the shared PostgreSQL
+server (load average about 3, runs of 108–146 s instead of 46 s), each failed
+`test_booking_concurrency.py::test_twenty_concurrent_reservations_for_one_slot_book_exactly_once[overlapping_starts]`
+(and once also `test_concurrent_replays_of_one_request_create_one_appointment`): the 19 losers
+ran out of deadlock retries. The booking code is untouched by this change. The file passed alone
+(12 passed) and the next full run passed. This is the load sensitivity of the 20-way race noted in
+the Milestone 5–7 integration section, and it is not resolved here.
+
+Not verified: a live Gemini call (no API key in this environment). The guard runs on the provider's
+parsed `TurnProposal`, so the fake provider exercises the same path.

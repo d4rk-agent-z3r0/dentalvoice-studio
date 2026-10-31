@@ -9,8 +9,8 @@ A caller turn runs in three phases so no database lock is held while a model is 
 2. **Propose** (no transaction): ask the conversation model for a ``TurnProposal``, timed.
 3. **Decide and commit** (transaction, row lock): re-check ``state_version`` (a concurrent turn
    loses with ``ConcurrentUpdateError``), validate and apply intake values, derive the path through
-   the state machine, run side effects (review, confirmation, snapshot, patient record), persist
-   the receptionist turn and every event.
+   the state machine, run side effects (review, confirmation, snapshot, patient record), check
+   any model-written reply with the reply guard, persist the receptionist turn and every event.
 
 The orchestrator is stateless: everything lives in PostgreSQL, so a restarted process continues
 any conversation exactly where it was.
@@ -51,6 +51,7 @@ from app.integrations.llm.base import (
 )
 from app.models import Conversation, ConversationTurn, Patient
 from app.orchestrators.decision import Decision, decide
+from app.orchestrators.reply_guard import check_reply, guard_context
 from app.orchestrators.responses import ReplyContext, compose_reply
 from app.repositories.clinics import ClinicRepository
 from app.repositories.conversations import ConversationRepository
@@ -280,7 +281,7 @@ class ConversationOrchestrator:
             await self._side_effects(session, conversation, decision, proposal, now)
 
             values = await intake.live_values(clinic_id, conversation_id)
-            reply = self._reply(recorded, conversation.state, decision, proposal, changes, values)
+            reply = self._reply(recorded, conversation, decision, proposal, changes, values, events)
             seq, _ = self._add_turn(
                 session,
                 conversation,
@@ -426,12 +427,15 @@ class ConversationOrchestrator:
     def _reply(
         self,
         recorded: _Recorded,
-        state: ConversationState,
+        conversation: Conversation,
         decision: Decision,
         proposal: TurnProposal,
         changes: IntakeChanges,
         values: LiveValues,
+        events: EventRepository,
     ) -> str:
+        state = conversation.state
+        plain = {name: value for name, (value, _) in values.items()}
         use_model_text = (
             self._provider.writes_responses
             and state not in _FIXED_REPLY_STATES
@@ -439,12 +443,26 @@ class ConversationOrchestrator:
             and not changes.rejected
         )
         if use_model_text:
-            return proposal.assistant_response
+            verdict = check_reply(proposal.assistant_response, guard_context(state, plain))
+            if verdict.allowed:
+                return proposal.assistant_response
+            # Reason codes only: never the text, never field values (it may echo either).
+            reasons = [reason.value for reason in verdict.reasons]
+            events.record(
+                conversation.clinic_id, conversation.id, "reply_filtered", {"reasons": reasons}
+            )
+            log.warning(
+                "reply_filtered",
+                conversation_id=str(conversation.id),
+                state=state.value,
+                reasons=reasons,
+                provider=self._provider.name,
+            )
         return compose_reply(
             ReplyContext(
                 clinic_name=recorded.context.clinic_name,
                 state=state,
-                values={name: value for name, (value, _) in values.items()},
+                values=plain,
                 missing=missing_fields(values),
                 services=recorded.context.services,
                 rejected=changes.rejected,
