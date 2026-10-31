@@ -632,3 +632,88 @@ the Milestone 5–7 integration section, and it is not resolved here.
 
 Not verified: a live Gemini call (no API key in this environment). The guard runs on the provider's
 parsed `TurnProposal`, so the fake provider exercises the same path.
+
+## Milestone 8 — Frontend sign-in and headers
+
+Run 2026-10-31 on `feat/m8-frontend-auth` (from `feat/m8-security` at `e697451`). The backend
+login, switch-clinic and me endpoints were being built in parallel, so everything here runs against
+the agreed contract with the API mocked; nothing was run against the real backend.
+
+### `feat(auth): add password sign-in and clinic switching to the dashboard`
+
+| Check | Command | Result |
+|---|---|---|
+| Frontend unit | `pnpm test` | 185 passed in 18 files (25 new: API client 6, session store 3, sign-in screen 8, session menu 8; existing auth and simulator tests updated for the new default screen) |
+| Mutation | 10 mutants, each run against its tests and restored: login sends the bearer token; a login `401` reaches `onUnauthorized`; password not cleared after a failure; `429` does not block submit; no remount on clinic switch; switcher shown for one clinic; a late switch response applied after sign-out; dev token offered in production; profile written to `sessionStorage`; sign-out leaves the token stored | all 10 killed (1 to 4 tests failed each) |
+| ESLint, `tsc`, SPDX headers | `pnpm lint`, `pnpm typecheck`, `python3 scripts/add_spdx_headers.py --check` | clean |
+| Next build | `NEXT_PUBLIC_API_BASE_URL=http://localhost:8091 pnpm build` | success |
+
+The password input is uncontrolled: read once on submit, sent only in the `POST` body and cleared
+after every attempt. Only `{token, method}` is mirrored to `sessionStorage`; the profile (user,
+clinic, role, clinics) stays in memory and is fetched again with `GET /auth/me` after a reload.
+`RequireSession` keys each page by the token's clinic, so a switch remounts the page and every query
+refetches with the new token; the unit test holds the new clinic's response back and asserts that
+the previous clinic's data is already gone while it loads.
+
+### `security(frontend): send a strict content security policy and security headers`
+
+The Next.js 16 CSP guide (`node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`)
+says inline scripts need a per-request nonce, nonces need dynamic rendering, and prerendered shells
+cannot carry one. A first build with only the proxy confirmed it: the static pages had 0 of 18
+scripts nonced and the partially prerendered `/patients/[id]` 6 of 16. The root layout now awaits
+`connection()` with `instant = false`; without `instant = false` the build fails with "uncached or
+runtime data during prerendering" on `/analytics`.
+
+| Check | Command | Result |
+|---|---|---|
+| CSP builder unit tests | `pnpm vitest run src/lib/security` | 11 passed |
+| Frontend unit | `pnpm test` | 196 passed in 19 files |
+| Mutation (unit) | `'unsafe-eval'` in production; `blob:` dropped from `media-src`; `ws:` origin dropped from `connect-src`; nonce not validated; `frame-ancestors 'self'`; microphone allowed | all 6 killed |
+| Mutation (browser) | `await connection()` removed from the root layout, rebuilt | every page static again, 0 of 18 scripts nonced; 19 CSP violations on `/patients` and the sign-in form never renders; browser check exits with a timeout |
+| Mutation (browser) | `blob:` removed from `media-src`, rebuilt | 3 browser checks fail: clip not played, `media-src` violation, console error |
+| ESLint, `tsc`, SPDX headers | as above | clean |
+| Next build | `NEXT_PUBLIC_API_BASE_URL=http://localhost:8091 pnpm build` | success: every route `ƒ` (dynamic); `/conversations/[id]` and `/patients/[id]` still listed `◐` but render every script per request |
+| Headers | `pnpm start`, then `curl -D - http://localhost:3101/simulator` | `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `X-Frame-Options: DENY` and the CSP below; a static chunk gets the four fixed headers and no CSP |
+| Nonce on every script | fetch each page, compare `nonce=` with the header | `/` 11 of 11, `/patients` 12 of 12, `/patients/abc` 12 of 12, `/simulator` 13 of 13, the 404 page 11 of 11; a new nonce on every request |
+
+Production policy (`next start`):
+
+```
+default-src 'self'; script-src 'self' 'nonce-…' 'strict-dynamic'; style-src 'self' 'nonce-…';
+img-src 'self'; font-src 'self'; connect-src 'self' http://localhost:8091 ws://localhost:8091;
+media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+```
+
+`next dev` adds `'unsafe-eval'` to `script-src` and uses `style-src 'self' 'unsafe-inline'` (the dev
+overlay injects styles without a nonce). `upgrade-insecure-requests` is added only when the API base
+URL is `https`.
+
+### Browser check
+
+Playwright (Chromium) against `next dev` and against `next start`, at 1280 px and 390 px. The API
+was a local mock on port 8091 serving real HTTP and a minimal WebSocket, rather than `page.route`,
+so the page's CSP applied to genuine requests; it returned the contract shapes for login,
+switch-clinic, me, patients, scenarios, conversations, WebSocket tickets and a WAV clip. The
+password was generated per run.
+
+| Step | `next dev` | `next start` |
+|---|---|---|
+| Sign-in form; wrong password shows the message and `request mock-N`; password cleared | pass | pass |
+| `429`: countdown from 4 s ticks down, submit disabled, enabled again at 0 | pass | pass |
+| Sign in: header shows Demo Admin, BrightSmile Dental, admin; login sent without `Authorization`; password not in storage or URL | pass | pass |
+| Switch to Harbour View Dental: the other clinic's patient replaces the first, header shows staff | pass | pass |
+| Reload: profile restored with `GET /auth/me` for the new clinic | pass | pass |
+| Simulator: conversation created, WebSocket to `ws://localhost:8091` connected, clip downloaded and played from a `blob:` URL | pass | pass |
+| Sign out: sign-in form, `sessionStorage` entry removed | pass | pass |
+| Horizontal overflow at both widths | none | none |
+| CSP violations | none | none |
+| Console errors and warnings | none apart from Chrome's own "Failed to load resource" lines for the deliberate `401` and `429` | same |
+| Negative control: `fetch("https://not-allowed.example.com/x")` | refused, one `connect-src` violation | same |
+
+45 of 45 checks passed in each run; the `next start` run was repeated on the final build after the
+mutation builds. Screenshots are kept outside the repository: `01-signin-desktop` to
+`15-signed-out-mobile`, with `-dev` and `-prod` suffixes.
+
+Not verified here: the real backend endpoints (not ready); the Docker image build; an HTTPS
+deployment (`wss:` and `upgrade-insecure-requests` are unit-tested only); browsers other than
+Chromium; screen-reader behaviour beyond the roles and labels the unit tests assert.

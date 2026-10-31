@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Siddharth Majhi
 // SPDX-License-Identifier: MIT
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import "./globals.css";
 import { DemoBanner } from "@/components/DemoBanner";
 import { AppHeader } from "@/components/shell/AppHeader";
@@ -12,7 +13,17 @@ export const metadata: Metadata = {
     "AI voice patient onboarding simulator for fictional dental clinics. All data is synthetic.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * Every page renders per request so that Next.js can put the proxy's CSP nonce on all of its
+ * scripts: a prerendered (static or partial) shell is built before any request exists and cannot
+ * carry a per-request nonce (see the Next.js CSP guide). Waiting for the connection here, outside
+ * any `<Suspense>`, is a blocking root, which `instant = false` allows. Pages are client-rendered
+ * behind the session check anyway, so nothing cacheable is lost.
+ */
+export const instant = false;
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-slate-50 text-slate-900">
