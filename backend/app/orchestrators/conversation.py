@@ -149,6 +149,21 @@ class ConversationOrchestrator:
             self._transition(session, conversation, [S.ABANDONED], self._clock())
             return conversation.state
 
+    async def record_reply_audio(
+        self,
+        clinic_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        turn_seq: int,
+        *,
+        tts_ms: int | None,
+        total_ms: int | None,
+    ) -> None:
+        """Store speech timings measured by the voice session for a receptionist turn."""
+        async with self._sf.begin() as session:
+            await TurnRepository(session).set_audio_timings(
+                clinic_id, conversation_id, turn_seq, tts_ms=tts_ms, total_ms=total_ms
+            )
+
     # --- caller turn ---------------------------------------------------------------------------
 
     async def handle_caller_turn(

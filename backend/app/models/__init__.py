@@ -20,6 +20,7 @@ from app.models.conversation import (
     ConversationTurn,
     IntakeDraft,
     IntakeSnapshot,
+    WsTicket,
 )
 from app.models.demo import SyntheticPersona, SyntheticScenario
 from app.models.patient import Patient
@@ -43,4 +44,5 @@ __all__ = [
     "SyntheticPersona",
     "SyntheticScenario",
     "User",
+    "WsTicket",
 ]

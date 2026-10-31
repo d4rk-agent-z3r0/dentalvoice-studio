@@ -1,7 +1,8 @@
 # Database Design
 
 > Status: **Implemented.** Alembic revisions `293745f95565` (core schema, Milestone 2) and
-> `7c1e2a9d4b10` (intake `not_provided`, Milestone 3). `ws_tickets` arrives with Milestone 8.
+> `7c1e2a9d4b10` (intake `not_provided`, Milestone 3), `e9bff6a540d7` (turn token usage,
+> Milestone 4) and `f61a7e4e6e78` (`ws_tickets`, Milestone 5).
 
 ## Conventions
 
@@ -34,7 +35,7 @@
 | `intake_drafts` | Per-field proposals with provenance | `field`, `value`, `status` ∈ {`provided`,`not_provided`,`needs_confirmation`,`confirmed`,`rejected`,`superseded`}, `(clinic_id, source_turn_id)` FK, `confidence` 0–1; CHECKs: rejected **iff** `rejection_reason`, `not_provided` **iff** no value; partial unique: at most one live value per field. A field never mentioned has no row; a declined one has a `not_provided` row |
 | `intake_snapshots` | Immutable confirmed intake, separate from drafts | `conversation_id` (uq), `data` jsonb object, `confirmed_at` |
 | `appointments` | Booking | composite FKs to patient, dentist, appointment type, conversation and `rescheduled_from`; `status` ∈ {`requested`,`confirmed`,`cancelled`,`rescheduled`}; `idempotency_key` (8–128 chars), `request_hash` |
-| `ws_tickets` | Single-use WS auth (Milestone 8) | `jti` (pk), `user_id`, `clinic_id`, `conversation_id`, `expires_at`, `used_at` |
+| `ws_tickets` | Single-use WebSocket admission (ADR-0006, migration `f61a7e4e6e78`) | `token_hash` (uq, SHA-256 hex only; the ticket itself is never stored), `(clinic_id, conversation_id)` FK, `user_id`, `expires_at` > `created_at`, `used_at` set atomically on redemption |
 | `audit_events` | Security-relevant actions | `clinic_id` (nullable: pre-auth events), `actor_user_id`, `action`, `resource_type`, `resource_id`, `request_id`; identifiers only, no free text |
 
 ## Integrity guarantees

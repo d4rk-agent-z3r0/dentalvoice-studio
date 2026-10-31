@@ -3,11 +3,12 @@
 """Conversation records. Turn processing and state changes live in the orchestrator."""
 
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import ProviderMode
-from app.domain.enums import ConversationState
+from app.domain.enums import ConversationState, Speaker
 from app.domain.errors import NotFoundError
 from app.models import Conversation
 from app.repositories.conversations import ConversationRepository
@@ -81,3 +82,37 @@ class ConversationService:
                 missing_fields=missing_fields(values),
                 snapshot=IntakeSnapshotData.model_validate(snapshot.data) if snapshot else None,
             )
+
+    async def voice_progress(
+        self, clinic_id: uuid.UUID, conversation_id: uuid.UUID
+    ) -> "VoiceProgress":
+        """Where a scripted call stands: its clips and how many replies have been given.
+
+        The next caller clip is the one after the last *answered* clip, so a turn that failed
+        (no reply) is replayed rather than skipped. Derived from the database on every call, so
+        it survives restarts and reconnects.
+        """
+        async with self._session_factory() as session:
+            row = await ConversationRepository(session).get(clinic_id, conversation_id)
+            if row is None:
+                raise NotFoundError("Conversation")
+            scenario = await ScenarioRepository(session).get(clinic_id, row.scenario_id)
+            replies = await TurnRepository(session).count(
+                clinic_id, conversation_id, Speaker.RECEPTIONIST
+            )
+            return VoiceProgress(
+                state=row.state,
+                clips=list(scenario.clips) if scenario else [],
+                answered_clips=max(0, replies - 1),  # the greeting answers no clip
+            )
+
+
+@dataclass(frozen=True)
+class VoiceProgress:
+    state: ConversationState
+    clips: list[str]
+    answered_clips: int
+
+    @property
+    def next_clip(self) -> str | None:
+        return self.clips[self.answered_clips] if self.answered_clips < len(self.clips) else None

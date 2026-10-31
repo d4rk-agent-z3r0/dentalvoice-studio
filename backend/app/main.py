@@ -19,8 +19,10 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.database.session import create_engine, create_session_factory
 from app.integrations.llm.factory import build_conversation_provider
+from app.integrations.speech.factory import build_speech_providers
 from app.middleware.request_id import RequestIdMiddleware
 from app.orchestrators.conversation import ConversationOrchestrator
+from app.voice.clips import default_library
 
 log = get_logger(__name__)
 
@@ -30,12 +32,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(settings.log_level)
     # Fails fast on a half-configured live mode instead of degrading at the first call.
     provider = build_conversation_provider(settings)
+    clip_library = default_library()
+    speech = build_speech_providers(settings, clip_library)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(settings)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
+        app.state.clip_library = clip_library
+        app.state.speech = speech
         app.state.orchestrator = ConversationOrchestrator(
             app.state.session_factory,
             provider,
@@ -46,6 +52,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             environment=settings.environment.value,
             provider_mode=settings.voice_provider_mode.value,
             conversation_provider=provider.name,
+            stt_provider=speech.stt.name,
+            tts_provider=speech.tts.name,
             auth_configured=settings.jwt_secret is not None,
         )
         try:

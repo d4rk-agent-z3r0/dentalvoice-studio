@@ -60,13 +60,20 @@ def _redact(value: Any) -> Any:
     return value
 
 
+# Query-string credentials inside free-text messages written by libraries (uvicorn logs the full
+# WebSocket path, including ``?ticket=``, when it accepts a connection).
+_QUERY_SECRET = re.compile(r"(?i)\b(ticket|token|access_token|key|api_key)=[^\s&\"']+")
+
+
 def redact_sensitive(
     _logger: Any, _method: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
-    """Redact sensitive keys at any depth. Free-text messages are not inspected: never put
-    sensitive values into the event string itself."""
+    """Redact sensitive keys at any depth, and credential-looking query parameters inside the
+    event message. Our own code never puts sensitive values into messages; libraries can."""
     for key in list(event_dict):
         if key == "event":
+            if isinstance(event_dict[key], str):
+                event_dict[key] = _QUERY_SECRET.sub(rf"\1={REDACTED}", event_dict[key])
             continue
         event_dict[key] = REDACTED if _is_sensitive(key) else _redact(event_dict[key])
     return event_dict

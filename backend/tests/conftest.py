@@ -47,6 +47,7 @@ def make_test_settings(database_url: str, **overrides: Any) -> Settings:
         "cors_origins": ["http://localhost:3000"],
         "db_connect_timeout_seconds": 1.0,
         "jwt_secret": SecretStr(TEST_JWT_SECRET),
+        "voice_realtime_factor": 0.0,
         **overrides,
     }
     return Settings(_env_file=None, **values)

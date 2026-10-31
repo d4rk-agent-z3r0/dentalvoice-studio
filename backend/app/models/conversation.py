@@ -197,3 +197,28 @@ class IntakeSnapshot(UUIDPrimaryKey, CreatedAt, Base):
     conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     data: Mapped[dict[str, Any]] = mapped_column(JSONB)
     confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class WsTicket(UUIDPrimaryKey, CreatedAt, Base):
+    """Single-use, short-lived WebSocket admission ticket (ADR-0006).
+
+    Only a SHA-256 of the ticket is stored. Redeeming it sets ``used_at`` atomically, so a ticket
+    replayed or raced by a second connection is refused.
+    """
+
+    __tablename__ = "ws_tickets"
+    __table_args__ = (
+        _conversation_fk(),
+        CheckConstraint("token_hash ~ '^[0-9a-f]{64}$'", name="token_hash_format"),
+        CheckConstraint("expires_at > created_at", name="expires_after_created"),
+        Index("ix_ws_tickets_expires_at", "expires_at"),
+    )
+
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    clinic_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

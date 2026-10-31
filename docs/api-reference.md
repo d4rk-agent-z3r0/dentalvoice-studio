@@ -54,32 +54,60 @@ FORBIDDEN`).
 | POST | `/api/v1/conversations/{id}/start` | admin, staff | `CREATED → GREETING`; returns the greeting turn |
 | POST | `/api/v1/conversations/{id}/turns` | admin, staff | `{text}` (1–500 chars). Typed caller turn for development and tests; **`403` when `ENVIRONMENT=production`**, where caller speech only comes from audio fixtures (M5) |
 | POST | `/api/v1/conversations/{id}/end` | admin, staff | Caller hung up: `ABANDONED`; `409 CONVERSATION_CLOSED` if already ended |
-| POST | `/api/v1/conversations/{id}/ws-ticket` | admin, staff | M8: `{ticket, expires_in}` (60 s, single use) |
-| GET | `/api/v1/audio/clips/{clip_id}` | any | M5: allow-listed fixture audio (`audio/wav`) |
 
 A turn response (`TurnResultRead`) carries `previous_state`, `state`, the full `path` of states
 entered in that turn, `state_version`, the receptionist `reply`, `missing_fields`,
 `rejected_fields` (field → reason), `corrected_fields` and the measured `llm_ms`.
 
-## WebSocket — M5
+## Voice — shipped in M5
 
-`GET /api/v1/ws/conversations/{id}?ticket=…`
+### Admission
 
-| Direction | `type` | Payload |
-|---|---|---|
-| C→S | `start` | — (server sends greeting) |
-| C→S | `next_clip` | — server picks the next scripted clip; the client cannot name arbitrary audio |
-| C→S | `end` | — marks `ABANDONED` if not terminal |
-| S→C | `state` | `{state, previous}` |
-| S→C | `clip` | `{clip_id, url}` — client starts playback |
-| S→C | `transcript.interim` | `{turn_seq, text}` — display only, never persisted |
-| S→C | `utterance.final` | `{turn_seq, text}` — committed caller turn |
-| S→C | `assistant.text` | `{turn_seq, text}` |
-| S→C | binary frame | 4-byte big-endian `turn_seq` header + audio chunk |
-| S→C | `assistant.audio_end` | `{turn_seq}` |
-| S→C | `intake` | field drafts with status/provenance |
-| S→C | `latency` | `{turn_seq, stt_ms, llm_ms, tts_first_byte_ms, total_ms}` measured server-side |
-| S→C | `error` | `{code, message, provider?}` — surfaced in UI, never swallowed |
+1. `POST /api/v1/conversations/{id}/ws-ticket` (admin, staff) → `{ticket, expires_in: 60}`. The
+   conversation must belong to the token's clinic (`404` otherwise) and not have ended (`409`).
+2. `GET /api/v1/ws/conversations/{id}?ticket=…` (WebSocket). The ticket is checked **before** the
+   handshake is accepted: it must be unused, unexpired and issued for this conversation, and it is
+   consumed atomically (a second connection with the same ticket is refused). Rejection is an HTTP
+   `403` handshake response. Only a SHA-256 of the ticket is stored, and `ticket=` values are
+   redacted from every log line, including the server's own connection log.
+
+`GET /api/v1/audio/clips/{clip_id}` (any role) serves a caller clip as `audio/wav` when the clip
+belongs to one of the clinic's scenarios; anything else is `404`. `X-Clip-Source` says whether it
+is the committed eSpeak NG fixture or a locally generated Deepgram clip.
+
+### Messages
+
+Client → server: JSON text frames of at most 1 KiB. Binary frames (audio) are refused with
+`AUDIO_NOT_ACCEPTED`: caller audio comes only from the scenario's synthetic clips.
+
+| `type` | Meaning |
+|---|---|
+| `start` | `CREATED → GREETING`; the receptionist greets |
+| `next_clip` | The server picks the scenario's next unanswered clip, announces it, and streams it to speech-to-text. While the receptionist is speaking this cancels the speech (barge-in); while a turn is being processed it queues (one command), then `BUSY` |
+| `end` | Caller hung up: `ABANDONED` unless already finished; the server closes the socket |
+
+Server → client:
+
+| `type` | Payload |
+|---|---|
+| `ready` | `{state, audio: {sample_rate, encoding: "linear16", channels}}` — the format of reply audio |
+| `clip` | `{clip_id, url, duration_ms}` — play `url` (fetch with the bearer token) |
+| `transcript.interim` | `{text}` — provisional, display only, never stored |
+| `utterance.final` | `{turn_seq, text}` — the committed caller turn |
+| `state` | `{state, previous, path}` — every state entered this turn |
+| `assistant.text` | `{turn_seq, text}` |
+| binary frame | 4-byte big-endian `turn_seq` + raw PCM in the `ready` format; drop frames for a turn you have moved past |
+| `assistant.audio_end` / `assistant.audio_cancelled` | `{turn_seq}` |
+| `intake` | `{missing_fields, rejected_fields: {field: reason}, corrected_fields}` |
+| `latency` | `{turn_seq, stt_ms, llm_ms, tts_first_byte_ms, total_ms}` measured on the server; `null` when a stage did not happen (the greeting has no STT or LLM stage). Also stored on the turns |
+| `closed` | `{state}` — the call ended; the server then closes the socket normally |
+| `error` | `{code, message, provider?}` — `NO_SPEECH`, `NO_MORE_CLIPS`, `CONVERSATION_CLOSED`, `INVALID_STATE_TRANSITION`, `INVALID_MESSAGE`, `BUSY`, `AUDIO_NOT_ACCEPTED`, `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`. Never swallowed, never replaced by mock output |
+
+Latency definitions: `stt_ms` = end of caller audio → utterance complete; `llm_ms` = the
+conversation-model call (all attempts); `tts_first_byte_ms` = synthesis request → first audio
+byte; `total_ms` = end of caller audio → first reply audio byte. With `VOICE_REALTIME_FACTOR=1`
+(default) caller audio is streamed at its real duration, so these are what a caller would
+experience; tests run at `0`.
 
 ## Availability — shipped in M6
 

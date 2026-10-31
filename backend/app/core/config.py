@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     stt_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
     tts_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
     speech_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    # 1.0 streams caller fixtures to STT in real time (a live call); 0 streams as fast as possible
+    # (tests). Latency figures are only meaningful at 1.0.
+    voice_realtime_factor: float = Field(default=1.0, ge=0, le=4)
 
     @field_validator(
         "jwt_secret",
