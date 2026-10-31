@@ -6,8 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 
-import { useAuth } from "@/lib/auth/AuthProvider";
-import { shortId } from "@/lib/format";
+import { SessionMenu } from "./SessionMenu";
 
 export const NAV_ITEMS = [
   { href: "/simulator", label: "Simulator" },
@@ -50,35 +49,6 @@ function ActiveNavLinks() {
   return <NavLinks pathname={usePathname()} />;
 }
 
-function SessionSummary() {
-  const { status, session, signOut } = useAuth();
-  if (status === "checking") return <p className="text-xs text-slate-500">Checking session…</p>;
-  if (!session) return <p className="text-xs text-slate-600">Not signed in</p>;
-  const { clinicId, role } = session.claims;
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      <dl className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-700">
-        <div className="flex gap-1">
-          <dt className="text-slate-500">Clinic</dt>
-          <dd className="font-mono" title={clinicId ?? undefined}>
-            {clinicId ? shortId(clinicId) : "unknown"}
-          </dd>
-        </div>
-        <div className="flex gap-1">
-          <dt className="text-slate-500">Role</dt>
-          <dd className="font-medium">{role ?? "unknown"}</dd>
-        </div>
-      </dl>
-      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
-        Dev token
-      </span>
-      <button type="button" onClick={signOut} className="btn-secondary px-2 py-1 text-xs">
-        Sign out
-      </button>
-    </div>
-  );
-}
-
 export function AppHeader() {
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -100,7 +70,7 @@ export function AppHeader() {
           </Suspense>
         </nav>
         <div className="order-2 ml-auto lg:order-3">
-          <SessionSummary />
+          <SessionMenu />
         </div>
       </div>
     </header>

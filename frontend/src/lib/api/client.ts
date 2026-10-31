@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 import { ApiError, networkError, parseApiError } from "./errors";
 import type {
+  AuthMe,
+  AuthTokenResponse,
   AnalyticsSummary,
   Appointment,
   AppointmentCreate,
@@ -15,6 +17,7 @@ import type {
   ProviderMode,
   LatencyReport,
   ListPatientsParams,
+  LoginRequest,
   Patient,
   PatientDetail,
   Scenario,
@@ -44,6 +47,16 @@ export interface RequestOptions {
 }
 
 export interface ApiClient {
+  /**
+   * Exchanges email and password for a token. Sent without a bearer token, and a `401` here is a
+   * wrong password, not an expired session, so it never reaches `onUnauthorized`.
+   */
+  login(credentials: LoginRequest, options?: RequestOptions): Promise<AuthTokenResponse>;
+  /** A new token for another clinic the user belongs to (`403 FORBIDDEN` otherwise). */
+  switchClinic(clinicId: string, options?: RequestOptions): Promise<AuthTokenResponse>;
+  /** Who the current token is for, with every clinic membership. */
+  me(options?: RequestOptions): Promise<AuthMe>;
+
   listScenarios(options?: RequestOptions): Promise<Scenario[]>;
   listConversations(
     params?: ListConversationsParams,
@@ -135,6 +148,15 @@ export const TEXT_TURN_PROBE_ID = "00000000-0000-0000-0000-000000000000";
 
 type Method = "GET" | "POST";
 
+interface SendOptions {
+  headers?: Record<string, string>;
+  /**
+   * `false` for the login request: no bearer token is attached and a `401` is returned to the
+   * caller as a normal error instead of ending the session.
+   */
+  authenticated?: boolean;
+}
+
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const baseUrl = resolveApiBaseUrl(options.baseUrl);
   const fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -145,10 +167,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     body: unknown,
     accept: string,
     { signal }: RequestOptions = {},
-    extraHeaders: Record<string, string> = {},
+    { headers: extraHeaders = {}, authenticated = true }: SendOptions = {},
   ): Promise<Response> {
     const headers = new Headers({ ...extraHeaders, Accept: accept });
-    const token = options.getToken();
+    const token = authenticated ? options.getToken() : null;
     if (token) headers.set("Authorization", `Bearer ${token}`);
     if (body !== undefined) headers.set("Content-Type", "application/json");
 
@@ -172,8 +194,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         response.status,
         payload,
         response.headers.get("X-Request-ID"),
+        response.headers.get("Retry-After"),
       );
-      if (error.isUnauthorized) options.onUnauthorized?.(error);
+      if (authenticated && error.isUnauthorized) options.onUnauthorized?.(error);
       throw error;
     }
     return response;
@@ -184,7 +207,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     path: string,
     body: unknown,
     requestOptions: RequestOptions = {},
-    extraHeaders: Record<string, string> = {},
+    sendOptions: SendOptions = {},
   ): Promise<T> {
     const response = await send(
       method,
@@ -192,7 +215,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       body,
       "application/json",
       requestOptions,
-      extraHeaders,
+      sendOptions,
     );
     const payload: unknown = await response.json().catch(() => undefined);
     if (payload === undefined) {
@@ -211,6 +234,23 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const id = (value: string) => encodeURIComponent(value);
 
   return {
+    login: (credentials, opts) =>
+      request<AuthTokenResponse>(
+        "POST",
+        "/api/v1/auth/login",
+        { email: credentials.email, password: credentials.password },
+        opts,
+        { authenticated: false },
+      ),
+    switchClinic: (clinicId, opts) =>
+      request<AuthTokenResponse>(
+        "POST",
+        "/api/v1/auth/switch-clinic",
+        { clinic_id: clinicId },
+        opts,
+      ),
+    me: (opts) => request<AuthMe>("GET", "/api/v1/auth/me", undefined, opts),
+
     listScenarios: (opts) =>
       request<Scenario[]>("GET", "/api/v1/scenarios", undefined, opts),
     listConversations: (params = {}, opts) => {
@@ -342,7 +382,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       ),
     createAppointment: (body, idempotencyKey, opts) =>
       request<Appointment>("POST", "/api/v1/appointments", body, opts, {
-        "Idempotency-Key": idempotencyKey,
+        headers: { "Idempotency-Key": idempotencyKey },
       }),
     cancelAppointment: (appointmentId, opts) =>
       request<Appointment>(

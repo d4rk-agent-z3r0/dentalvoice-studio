@@ -338,7 +338,7 @@ describe("Voice simulator", () => {
     );
     fireEvent.click(await screen.findByRole("radio", { name: /^A · / }));
     fireEvent.click(screen.getByRole("button", { name: "Start call" }));
-    expect(await screen.findByRole("heading", { name: "Developer sign-in" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
 
   it("never asks for the microphone during a call", async () => {

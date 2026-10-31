@@ -4,6 +4,8 @@ import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { vi } from "vitest";
 
+import { RequireSession } from "@/components/auth/RequireSession";
+import { AppHeader } from "@/components/shell/AppHeader";
 import { ApiProvider } from "@/lib/api/ApiProvider";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { createSessionStore, type SessionStore } from "@/lib/auth/session-store";
@@ -82,6 +84,41 @@ export function renderWithProviders(
     </AuthProvider>,
   );
   return { ...result, store };
+}
+
+/**
+ * The app shell as the root layout composes it: header and a page behind `RequireSession`. Tests
+ * that sign in, switch clinic or sign out use this so the header and page share one session.
+ */
+export function renderShell(
+  page: ReactElement,
+  {
+    fetchImpl,
+    storage = memoryStorage(),
+    now,
+  }: { fetchImpl?: typeof fetch; storage?: Storage; now?: () => number } = {},
+): RenderResult & { store: SessionStore; storage: Storage } {
+  const store = createSessionStore(() => storage);
+  const result = render(
+    <AuthProvider store={store} now={now}>
+      <ApiProvider fetchImpl={fetchImpl}>
+        <AppHeader />
+        <main>
+          <RequireSession>{page}</RequireSession>
+        </main>
+      </ApiProvider>
+    </AuthProvider>,
+  );
+  return { ...result, store, storage };
+}
+
+/** A promise the test settles by hand, to observe pending states. */
+export function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 export function errorBody(code: string, message: string, requestId = "req-123") {

@@ -33,6 +33,53 @@ export function isConversationState(value: string): value is ConversationState {
 }
 
 export type ClinicRole = "admin" | "staff" | "viewer";
+
+/** `POST /api/v1/auth/login` body. Sent once; never stored. */
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/** The signed-in dashboard user. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  display_name: string;
+}
+
+/** The clinic the current token is for. */
+export interface AuthClinic {
+  id: string;
+  name: string;
+  timezone: string;
+}
+
+/** One clinic the user belongs to, with their role there. */
+export interface ClinicMembership {
+  id: string;
+  name: string;
+  role: ClinicRole;
+}
+
+/**
+ * `GET /api/v1/auth/me`: who the token is for. `clinics` lists every membership, sorted by name;
+ * `clinic` and `role` are the token's.
+ */
+export interface AuthMe {
+  user: AuthUser;
+  clinic: AuthClinic;
+  role: ClinicRole;
+  clinics: ClinicMembership[];
+}
+
+/** `POST /api/v1/auth/login` and `/auth/switch-clinic`: a new token for `clinic`. */
+export interface AuthTokenResponse extends AuthMe {
+  access_token: string;
+  token_type: "bearer";
+  /** Seconds. */
+  expires_in: number;
+}
+
 export type Speaker = "caller" | "receptionist";
 export type ProviderMode = "mock" | "live";
 export type PatientType = "new" | "returning";

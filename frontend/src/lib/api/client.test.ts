@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, it, vi } from "vitest";
 
-import { conversation, scenario, turnResult } from "@/test/fixtures";
+import {
+  SECOND_CLINIC_ID,
+  authMe,
+  authTokenResponse,
+  conversation,
+  scenario,
+  turnResult,
+} from "@/test/fixtures";
 import { errorBody, fakeApi } from "@/test/render";
 
 import { TEXT_TURN_PROBE_ID, createApiClient, resolveApiBaseUrl } from "./client";
@@ -244,6 +251,123 @@ describe("createApiClient", () => {
       "/api/v1/analytics/latency",
       "/api/v1/analytics/latency?provider_mode=mock",
     ]);
+  });
+});
+
+describe("auth endpoints", () => {
+  const credentials = () => ({
+    email: "demo.staff@example.com",
+    // Generated per test: no password-like literal is committed.
+    password: `pw-${crypto.randomUUID()}`,
+  });
+
+  it("logs in without an Authorization header, even while a token is held", async () => {
+    const response = authTokenResponse();
+    const api = fakeApi({ "POST /api/v1/auth/login": { status: 200, body: response } });
+    const client = createApiClient({
+      baseUrl: BASE,
+      getToken: () => "stale-token",
+      fetchImpl: api.fetchImpl,
+    });
+    const body = credentials();
+
+    await expect(client.login(body)).resolves.toEqual(response);
+
+    expect(api.requests[0].headers.has("Authorization")).toBe(false);
+    expect(api.requests[0].body).toEqual(body);
+    expect(api.requests[0].search).toBe("");
+  });
+
+  it("does not report a failed login to onUnauthorized", async () => {
+    const api = fakeApi({
+      "POST /api/v1/auth/login": {
+        status: 401,
+        body: errorBody("AUTH_FAILED", "Email or password is incorrect.", "rid-login"),
+      },
+    });
+    const onUnauthorized = vi.fn();
+    const client = createApiClient({
+      baseUrl: BASE,
+      getToken: () => null,
+      onUnauthorized,
+      fetchImpl: api.fetchImpl,
+    });
+
+    await expect(client.login(credentials())).rejects.toMatchObject({
+      status: 401,
+      code: "AUTH_FAILED",
+      requestId: "rid-login",
+    });
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("reads the wait after a rate-limited login from the body, then the header", async () => {
+    const limited = (body: unknown, headers: Record<string, string> = {}) => {
+      const fetchImpl = vi.fn(
+        async () =>
+          new Response(JSON.stringify(body), {
+            status: 429,
+            headers: { "Content-Type": "application/json", ...headers },
+          }),
+      ) as unknown as typeof fetch;
+      return createApiClient({ baseUrl: BASE, getToken: () => null, fetchImpl });
+    };
+    const fromBody = {
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many attempts.",
+        request_id: "r",
+        retry_after_seconds: 42,
+      },
+    };
+
+    await expect(limited(fromBody, { "Retry-After": "7" }).login(credentials())).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 42,
+    });
+    await expect(
+      limited(errorBody("RATE_LIMITED", "Too many attempts."), { "Retry-After": "7" }).login(
+        credentials(),
+      ),
+    ).rejects.toMatchObject({ retryAfterSeconds: 7 });
+    await expect(
+      limited(errorBody("RATE_LIMITED", "Too many attempts.")).login(credentials()),
+    ).rejects.toMatchObject({ retryAfterSeconds: null });
+  });
+
+  it("switches clinic with the bearer token and only the clinic id in the body", async () => {
+    const api = fakeApi({
+      "POST /api/v1/auth/switch-clinic": { status: 200, body: authTokenResponse() },
+    });
+    const client = createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl });
+    await client.switchClinic(SECOND_CLINIC_ID);
+    expect(api.requests[0].headers.get("Authorization")).toBe("Bearer t");
+    expect(api.requests[0].body).toEqual({ clinic_id: SECOND_CLINIC_ID });
+  });
+
+  it("treats a 401 from switch-clinic or me as an ended session", async () => {
+    const api = fakeApi({
+      "POST /api/v1/auth/switch-clinic": { status: 401, body: errorBody("AUTH_INVALID", "Expired.") },
+      "GET /api/v1/auth/me": { status: 401, body: errorBody("AUTH_INVALID", "Expired.") },
+    });
+    const onUnauthorized = vi.fn();
+    const client = createApiClient({
+      baseUrl: BASE,
+      getToken: () => "t",
+      onUnauthorized,
+      fetchImpl: api.fetchImpl,
+    });
+    await expect(client.switchClinic(SECOND_CLINIC_ID)).rejects.toMatchObject({ status: 401 });
+    await expect(client.me()).rejects.toMatchObject({ status: 401 });
+    expect(onUnauthorized).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads who the token is for", async () => {
+    const me = authMe();
+    const api = fakeApi({ "GET /api/v1/auth/me": { status: 200, body: me } });
+    const client = createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl });
+    await expect(client.me()).resolves.toEqual(me);
+    expect(api.requests[0].headers.get("Authorization")).toBe("Bearer t");
   });
 });
 

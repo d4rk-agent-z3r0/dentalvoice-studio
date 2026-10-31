@@ -8,15 +8,41 @@
  * Exposed as an external store for `useSyncExternalStore`: the server snapshot is always
  * `checking`, so prerendered HTML never depends on browser storage and hydration cannot mismatch.
  */
+import type { AuthMe, AuthTokenResponse } from "@/lib/api/types";
+
 import { readDisplayClaims, type DisplayClaims } from "./token";
 
-/** How the token was obtained. Milestone 8 adds `"password"` (login endpoint). */
-export type AuthMethod = "developer_token";
+/** How the session started: the login endpoint, or a pasted development token. */
+export type AuthMethod = "password" | "developer_token";
+
+const AUTH_METHODS: readonly AuthMethod[] = ["password", "developer_token"];
+
+function isAuthMethod(value: unknown): value is AuthMethod {
+  return AUTH_METHODS.includes(value as AuthMethod);
+}
+
+/**
+ * Who the session is for, as the server reported it (login, switch-clinic or `GET /auth/me`).
+ * Display only, like the claims. Kept in memory and never written to storage, so a reload fetches
+ * it again with `me`.
+ */
+export type SessionProfile = AuthMe;
+
+/** The profile part of a login or switch-clinic response (everything but the token). */
+export function profileFromTokenResponse(response: AuthTokenResponse): SessionProfile {
+  return {
+    user: response.user,
+    clinic: response.clinic,
+    role: response.role,
+    clinics: response.clinics,
+  };
+}
 
 export interface Session {
   token: string;
   method: AuthMethod;
   claims: DisplayClaims;
+  profile: SessionProfile | null;
 }
 
 export interface SignedOutNotice {
@@ -34,7 +60,9 @@ export interface SessionStore {
   getSnapshot(): AuthSnapshot;
   getServerSnapshot(): AuthSnapshot;
   getToken(): string | null;
-  setSession(token: string, method: AuthMethod): Session;
+  setSession(token: string, method: AuthMethod, profile?: SessionProfile | null): Session;
+  /** Attaches a profile, but only while `token` is still the current session's token. */
+  setProfile(token: string, profile: SessionProfile): void;
   clear(notice?: SignedOutNotice | null): void;
 }
 
@@ -58,9 +86,9 @@ function readPersisted(storage: Storage | null): Session | null {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
     const { token, method } = parsed as Record<string, unknown>;
-    if (typeof token !== "string" || method !== "developer_token") return null;
+    if (typeof token !== "string" || !isAuthMethod(method)) return null;
     const claims = readDisplayClaims(token);
-    return claims ? { token, method, claims } : null;
+    return claims ? { token, method, claims, profile: null } : null;
   } catch {
     return null;
   }
@@ -96,10 +124,10 @@ export function createSessionStore(getStorage: () => Storage | null = defaultSto
       const value = current();
       return value.status === "signed_in" ? value.session.token : null;
     },
-    setSession(token, method) {
+    setSession(token, method, profile = null) {
       const claims = readDisplayClaims(token);
       if (!claims) throw new Error("Not an access token.");
-      const session: Session = { token, method, claims };
+      const session: Session = { token, method, claims, profile };
       try {
         getStorage()?.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token, method }));
       } catch {
@@ -107,6 +135,11 @@ export function createSessionStore(getStorage: () => Storage | null = defaultSto
       }
       publish({ status: "signed_in", session });
       return session;
+    },
+    setProfile(token, profile) {
+      const value = current();
+      if (value.status !== "signed_in" || value.session.token !== token) return;
+      publish({ status: "signed_in", session: { ...value.session, profile } });
     },
     clear(notice = null) {
       try {

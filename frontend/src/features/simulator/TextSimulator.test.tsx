@@ -236,7 +236,7 @@ describe("TextSimulator", () => {
     );
     say(await startScenarioA(), "Hello?");
 
-    expect(await screen.findByRole("heading", { name: "Developer sign-in" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "The API rejected the session (AUTH_INVALID): The access token has expired.",
     );

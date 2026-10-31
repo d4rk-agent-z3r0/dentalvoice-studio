@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 /** Synthetic fixtures shaped like real API responses (captured from the M3 backend). */
 import type {
+  AuthMe,
+  AuthTokenResponse,
   Appointment,
   Availability,
   ClinicInfo,
@@ -157,6 +159,34 @@ export function makeToken(
     ...claims,
   };
   return `${base64Url({ alg: "HS256", typ: "JWT" })}.${base64Url(payload)}.c2lnbmF0dXJl`;
+}
+
+export const USER_ID = "01a191cc-3a00-7000-8000-0000000005e7";
+export const SECOND_CLINIC_ID = "01a191cc-3a00-7000-8000-00000000c22c";
+
+/** The demo admin's view: a member of two clinics, signed in to the first. */
+export function authMe(overrides: Partial<AuthMe> = {}): AuthMe {
+  return {
+    user: { id: USER_ID, email: "demo.admin@example.com", display_name: "Demo Admin" },
+    clinic: { id: CLINIC_ID, name: "BrightSmile Dental", timezone: "Europe/London" },
+    role: "admin",
+    clinics: [
+      { id: CLINIC_ID, name: "BrightSmile Dental", role: "admin" },
+      { id: SECOND_CLINIC_ID, name: "Harbour View Dental", role: "staff" },
+    ],
+    ...overrides,
+  };
+}
+
+/** A login or switch-clinic response whose token carries the same clinic and role. */
+export function authTokenResponse(overrides: Partial<AuthMe> = {}): AuthTokenResponse {
+  const me = authMe(overrides);
+  return {
+    access_token: makeToken({ clinic_id: me.clinic.id, role: me.role, sub: me.user.id }),
+    token_type: "bearer",
+    expires_in: 3600,
+    ...me,
+  };
 }
 
 export function scenario(overrides: Partial<Scenario> = {}): Scenario {

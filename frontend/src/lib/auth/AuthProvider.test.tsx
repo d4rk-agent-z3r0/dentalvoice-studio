@@ -6,15 +6,19 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RequireSession } from "@/components/auth/RequireSession";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { ApiProvider } from "@/lib/api/ApiProvider";
 import { ApiError } from "@/lib/api/errors";
 import { CLINIC_ID, makeToken } from "@/test/fixtures";
-import { memoryStorage } from "@/test/render";
+import { errorBody, fakeApi, memoryStorage } from "@/test/render";
 
 import { AuthProvider, useAuth, type AuthContextValue } from "./AuthProvider";
 import { createSessionStore, SESSION_STORAGE_KEY } from "./session-store";
 import { readDisplayClaims } from "./token";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/conversations" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/conversations",
+  useRouter: () => ({ replace: vi.fn() }),
+}));
 
 const probe: { current: AuthContextValue | null } = { current: null };
 function Probe() {
@@ -27,21 +31,30 @@ function Probe() {
 
 function renderAuth(storage: Storage = memoryStorage(), now = () => Date.UTC(2026, 9, 31)) {
   const store = createSessionStore(() => storage);
+  // A backend without `GET /auth/me`: the header falls back to the token's claims.
+  const api = fakeApi({
+    "GET /api/v1/auth/me": { status: 404, body: errorBody("NOT_FOUND", "Not found.") },
+  });
   render(
     <AuthProvider store={store} now={now}>
-      <Probe />
-      <AppHeader />
-      <main>
-        <RequireSession>
-          <p>Protected content</p>
-        </RequireSession>
-      </main>
+      <ApiProvider fetchImpl={api.fetchImpl}>
+        <Probe />
+        <AppHeader />
+        <main>
+          <RequireSession>
+            <p>Protected content</p>
+          </RequireSession>
+        </main>
+      </ApiProvider>
     </AuthProvider>,
   );
   return { store, storage };
 }
 
 function signInWith(token: string) {
+  if (!screen.queryByLabelText("Access token")) {
+    fireEvent.click(screen.getByRole("button", { name: "Use a developer token instead" }));
+  }
   fireEvent.change(screen.getByLabelText("Access token"), { target: { value: token } });
   fireEvent.click(screen.getByRole("button", { name: "Sign in with token" }));
 }
@@ -64,10 +77,11 @@ describe("readDisplayClaims", () => {
 });
 
 describe("AuthProvider with developer sign-in", () => {
-  it("shows the development-only sign-in screen when there is no session", () => {
+  it("shows the sign-in screen, with the developer token as a secondary option, when there is no session", () => {
     renderAuth();
-    expect(screen.getByRole("heading", { name: "Developer sign-in" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByText("Development only")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Access token")).not.toBeInTheDocument();
     expect(screen.queryByText("Protected content")).not.toBeInTheDocument();
     expect(screen.getByText("Not signed in")).toBeInTheDocument();
   });
@@ -103,7 +117,7 @@ describe("AuthProvider with developer sign-in", () => {
     const storage = memoryStorage();
     storage.setItem(SESSION_STORAGE_KEY, "{not json");
     renderAuth(storage);
-    expect(screen.getByRole("heading", { name: "Developer sign-in" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
 
   it("refuses a malformed token with an explanation", () => {
@@ -124,7 +138,7 @@ describe("AuthProvider with developer sign-in", () => {
     const { storage } = renderAuth();
     signInWith(makeToken());
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(screen.getByRole("heading", { name: "Developer sign-in" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
     expect(probe.current?.getToken()).toBeNull();
   });
@@ -159,7 +173,7 @@ describe("AuthProvider with developer sign-in", () => {
     signInWith(makeToken());
     expect(screen.getByText("Protected content")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(screen.getByRole("heading", { name: "Developer sign-in" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
 
   it("renders a neutral checking state on the server snapshot", () => {

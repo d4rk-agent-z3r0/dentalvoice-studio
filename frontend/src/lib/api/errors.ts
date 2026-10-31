@@ -18,6 +18,8 @@ export class ApiError extends Error {
   readonly code: string;
   readonly requestId: string | null;
   readonly details: ValidationDetail[];
+  /** For `429 RATE_LIMITED`: how long to wait before trying again, when the server said. */
+  readonly retryAfterSeconds: number | null;
 
   constructor(options: {
     status: number;
@@ -25,6 +27,7 @@ export class ApiError extends Error {
     message: string;
     requestId?: string | null;
     details?: ValidationDetail[];
+    retryAfterSeconds?: number | null;
   }) {
     super(options.message);
     this.name = "ApiError";
@@ -32,6 +35,7 @@ export class ApiError extends Error {
     this.code = options.code;
     this.requestId = options.requestId ?? null;
     this.details = options.details ?? [];
+    this.retryAfterSeconds = options.retryAfterSeconds ?? null;
   }
 
   get isUnauthorized(): boolean {
@@ -52,12 +56,30 @@ function parseDetails(value: unknown): ValidationDetail[] {
   });
 }
 
+/** A whole number of seconds from `error.retry_after_seconds` or a `Retry-After: <seconds>` header. */
+function parseRetryAfter(bodyValue: unknown, header: string | null | undefined): number | null {
+  if (typeof bodyValue === "number" && Number.isFinite(bodyValue) && bodyValue >= 0) {
+    return Math.ceil(bodyValue);
+  }
+  const trimmed = header?.trim();
+  if (trimmed && /^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  return null;
+}
+
 /**
  * Builds an `ApiError` from a non-2xx response body. Bodies that do not follow the contract (a
  * proxy's HTML page, an empty body) become `UNEXPECTED_RESPONSE` with the HTTP status kept, so the
  * UI never invents a code the server did not send.
+ *
+ * The wait after a `429` is read from the body first: a cross-origin page can only read the
+ * `Retry-After` header when the API lists it in `Access-Control-Expose-Headers`.
  */
-export function parseApiError(status: number, body: unknown, requestIdHeader?: string | null) {
+export function parseApiError(
+  status: number,
+  body: unknown,
+  requestIdHeader?: string | null,
+  retryAfterHeader?: string | null,
+) {
   const error = isRecord(body) ? body.error : undefined;
   if (isRecord(error) && typeof error.code === "string" && typeof error.message === "string") {
     const requestId = typeof error.request_id === "string" ? error.request_id : requestIdHeader;
@@ -67,6 +89,7 @@ export function parseApiError(status: number, body: unknown, requestIdHeader?: s
       message: error.message,
       requestId: requestId ?? null,
       details: parseDetails(error.details),
+      retryAfterSeconds: parseRetryAfter(error.retry_after_seconds, retryAfterHeader),
     });
   }
   return new ApiError({
@@ -74,6 +97,7 @@ export function parseApiError(status: number, body: unknown, requestIdHeader?: s
     code: "UNEXPECTED_RESPONSE" satisfies ClientErrorCode,
     message: `The server responded with HTTP ${status} and no error details.`,
     requestId: requestIdHeader ?? null,
+    retryAfterSeconds: parseRetryAfter(undefined, retryAfterHeader),
   });
 }
 
