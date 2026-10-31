@@ -130,3 +130,13 @@ async def test_api_docs_are_disabled_in_production(client_factory: ClientFactory
             response = await client.get(path)
             assert response.status_code == 404, path
             _assert_hardened(response)
+
+
+async def test_cross_origin_pages_can_read_the_headers_they_need(
+    client: httpx.AsyncClient,
+) -> None:
+    response = await client.get("/health/live", headers={"Origin": ALLOWED})
+    exposed = {
+        h.strip().lower() for h in response.headers["access-control-expose-headers"].split(",")
+    }
+    assert {"x-request-id", "retry-after", "idempotent-replayed"} <= exposed
