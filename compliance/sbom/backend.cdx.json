@@ -79,6 +79,29 @@
       "version": "3.0.4"
     },
     {
+      "bom-ref": "PyJWT==2.15.1",
+      "description": "JSON Web Token implementation in Python",
+      "externalReferences": [
+        {
+          "comment": "from packaging metadata Project-URL: Homepage",
+          "type": "website",
+          "url": "https://github.com/jpadilla/pyjwt"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "acknowledgement": "declared",
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "PyJWT",
+      "purl": "pkg:pypi/pyjwt@2.15.1",
+      "type": "library",
+      "version": "2.15.1"
+    },
+    {
       "bom-ref": "PyYAML==6.0.3",
       "description": "YAML parser and emitter for Python",
       "externalReferences": [
@@ -1740,6 +1763,12 @@
       "ref": "MarkupSafe==3.0.4"
     },
     {
+      "dependsOn": [
+        "typing_extensions==4.16.0"
+      ],
+      "ref": "PyJWT==2.15.1"
+    },
+    {
       "ref": "PyYAML==6.0.3"
     },
     {
@@ -1939,6 +1968,7 @@
     },
     {
       "dependsOn": [
+        "PyJWT==2.15.1",
         "SQLAlchemy==2.1.6",
         "alembic==1.20.1",
         "asyncpg==0.32.0",

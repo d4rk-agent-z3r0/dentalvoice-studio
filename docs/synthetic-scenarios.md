@@ -24,12 +24,12 @@ exists so that tenant-isolation tests have real data on both sides.
 | A | Ava Lindqvist, new | Routine cleaning | `COMPLETED` | Happy path: all ten fields captured, spoken email normalised |
 | B | Marcus Bellweather, returning | Follow-up visit | `COMPLETED` | Existing patient matched by contact value (seeded as a registered patient) |
 | C | Elena Fairbanks, new | Check-up | `COMPLETED` | Corrections: email fixed, date changed from Monday to Wednesday during review; history kept |
-| D | Jordan Okonkwo-Hale, new | Check-up | `ABANDONED` | Missing date, time and email are never guessed; the call ends honestly |
-| E | Noah Brightwater, returning | — | `ESCALATED` | Urgent symptoms stop routine intake; no clinical advice is given |
+| D | Jordan Okonkwo-Hale, new | Check-up | `ABANDONED` | Email explicitly declined (`not_provided`); date and time stay missing and are never guessed; the call ends honestly |
+| E | Noah Brightwater, returning | — | `ESCALATED` | Urgent symptoms in the first sentence stop routine intake; a fixed safety message is spoken; no clinical advice |
 
 Each scenario in the catalogue carries the persona, objective, ordered caller clips (with the
 transcript the synthetic audio is generated from), the expected state transitions, the expected
-extracted fields, missing and corrected fields, and the expected final state. The expectation is
+extracted fields, missing, declined and corrected fields, and the expected final state. The expectation is
 stored with the scenario (`synthetic_scenarios.expected`) and is what the Milestone 3 acceptance
 tests assert against.
 

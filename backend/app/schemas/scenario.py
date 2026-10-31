@@ -17,6 +17,7 @@ class ScenarioExpectation(BaseModel):
     final_state: ConversationState
     fields: dict[IntakeField, str]
     missing_fields: list[IntakeField] = []
+    declined_fields: list[IntakeField] = []
     corrected_fields: list[IntakeField] = []
     escalation_reason: str | None = None
 

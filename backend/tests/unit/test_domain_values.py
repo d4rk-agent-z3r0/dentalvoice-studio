@@ -32,7 +32,14 @@ def test_uuid7_is_time_ordered() -> None:
     assert first < second
 
 
+def test_uuid7_is_strictly_increasing_within_one_millisecond() -> None:
+    ids = [uuid7() for _ in range(5000)]  # far more than fit in one millisecond's randomness
+    assert ids == sorted(ids)
+    assert len(set(ids)) == len(ids)
+
+
 def test_uuid7_embeds_current_unix_milliseconds() -> None:
+    time.sleep(0.005)  # a burst in another test may have borrowed the next millisecond
     before = time.time_ns() // 1_000_000
     value = uuid7()
     after = time.time_ns() // 1_000_000

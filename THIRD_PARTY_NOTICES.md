@@ -22,7 +22,7 @@ package as installed. Inclusion in this list is not an endorsement.
 
 | Category | Packages |
 |---|---|
-| allowed | 540 |
+| allowed | 541 |
 | conditional-reviewed | 42 |
 | conditional-unreviewed | 0 |
 | disallowed | 0 |
@@ -72,6 +72,7 @@ package as installed. Inclusion in this list is not an endorsement.
 | pydantic_core | 2.50.2 | MIT |  | runtime |  | allowed | https://github.com/pydantic |
 | pydantic-settings | 2.16.2 | MIT |  | runtime | yes | allowed | https://github.com/pydantic/pydantic-settings |
 | Pygments | 2.21.0 | BSD-2-Clause |  | dev |  | allowed | https://pygments.org |
+| PyJWT | 2.15.1 | MIT |  | runtime | yes | allowed | https://github.com/jpadilla/pyjwt |
 | pytest | 9.2.0 | MIT |  | dev | yes | allowed | https://docs.pytest.org/en/latest/ |
 | pytest-asyncio | 1.4.1 | Apache-2.0 |  | dev | yes | allowed | https://github.com/pytest-dev/pytest-asyncio |
 | pytest-cov | 7.1.0 | MIT |  | dev | yes | allowed | https://pytest-cov.readthedocs.io/en/latest/changelog.html |

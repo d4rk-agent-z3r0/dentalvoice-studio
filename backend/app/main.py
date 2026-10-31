@@ -13,10 +13,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import health
+from app.api import v1 as api_v1
+from app.api.errors import install_error_handlers
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.database.session import create_engine, create_session_factory
+from app.integrations.llm.factory import build_conversation_provider
 from app.middleware.request_id import RequestIdMiddleware
+from app.orchestrators.conversation import ConversationOrchestrator
 
 log = get_logger(__name__)
 
@@ -24,16 +28,25 @@ log = get_logger(__name__)
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
+    # Fails fast on a half-configured live mode instead of degrading at the first call.
+    provider = build_conversation_provider(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(settings)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
+        app.state.orchestrator = ConversationOrchestrator(
+            app.state.session_factory,
+            provider,
+            booking_horizon_days=settings.booking_horizon_days,
+        )
         log.info(
             "startup",
             environment=settings.environment.value,
             provider_mode=settings.voice_provider_mode.value,
+            conversation_provider=provider.name,
+            auth_configured=settings.jwt_secret is not None,
         )
         try:
             yield
@@ -57,5 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
     app.add_middleware(RequestIdMiddleware)
+    install_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(api_v1.router)
     return app

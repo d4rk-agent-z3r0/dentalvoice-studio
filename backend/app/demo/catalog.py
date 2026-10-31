@@ -18,7 +18,13 @@ scenarios never go stale. Expected values use ``next:<weekday>`` for that reason
 from dataclasses import dataclass, field
 from datetime import time
 
-from app.domain.enums import ContactChannel, ConversationState, IntakeField, PatientType
+from app.domain.enums import (
+    ClinicRole,
+    ContactChannel,
+    ConversationState,
+    IntakeField,
+    PatientType,
+)
 
 S = ConversationState
 F = IntakeField
@@ -67,6 +73,7 @@ class Scenario:
     states: tuple[ConversationState, ...]
     fields: dict[IntakeField, str]
     missing_fields: tuple[IntakeField, ...] = ()
+    declined_fields: tuple[IntakeField, ...] = ()
     corrected_fields: tuple[IntakeField, ...] = ()
     escalation_reason: str | None = None
 
@@ -256,7 +263,9 @@ BRIGHTSMILE = Clinic(
                 Clip("c-01", "Hi, I'm a new patient and I'd like a check-up."),
                 Clip("c-02", "My name is Elena Fairbanks."),
                 Clip("c-03", "Please email me at elena dot fairbank at example dot net."),
-                Clip("c-04", "Sorry, I missed a letter. It's fairbanks with an s at the end."),
+                Clip(
+                    "c-04", "Sorry, I misspelled that. It's elena dot fairbanks at example dot net."
+                ),
                 Clip("c-05", "My phone is 555-0103."),
                 Clip("c-06", "A regular check-up. It's been about a year."),
                 Clip("c-07", "Next Monday at nine thirty, please."),
@@ -328,7 +337,8 @@ BRIGHTSMILE = Clinic(
                 F.VISIT_REASON: "check-up",
                 F.REQUESTED_SERVICE: "checkup",
             },
-            missing_fields=(F.EMAIL, F.PREFERRED_DATE, F.PREFERRED_TIME),
+            missing_fields=(F.PREFERRED_DATE, F.PREFERRED_TIME),
+            declined_fields=(F.EMAIL,),
         ),
         Scenario(
             code="E",
@@ -344,7 +354,6 @@ BRIGHTSMILE = Clinic(
                     "Hi, I'm a patient there. My jaw is really swollen, I have a fever, and it's "
                     "getting hard to swallow.",
                 ),
-                Clip("e-02", "Okay. Thank you."),
             ),
             states=(S.CREATED, S.GREETING, S.INTRODUCTION, S.ESCALATED),
             fields={F.PATIENT_TYPE: "returning"},
@@ -422,3 +431,23 @@ def clip_index() -> dict[str, Clip]:
                     raise ValueError(f"Duplicate clip id {clip.id!r}")
                 index[clip.id] = clip
     return index
+
+
+@dataclass(frozen=True)
+class DemoUser:
+    email: str
+    display_name: str
+    roles: dict[str, ClinicRole]  # clinic slug -> role
+
+
+# Dashboard identities for the demo. Passwords and login arrive in Milestone 8; until then a
+# development-only command issues tokens for these users (``make dev-token``).
+DEMO_USERS: tuple[DemoUser, ...] = (
+    DemoUser(
+        "demo.admin@example.com",
+        "Demo Admin",
+        {"brightsmile": ClinicRole.ADMIN, "juniper-vale": ClinicRole.ADMIN},
+    ),
+    DemoUser("demo.staff@example.com", "Demo Staff", {"brightsmile": ClinicRole.STAFF}),
+    DemoUser("demo.viewer@example.org", "Demo Viewer", {"brightsmile": ClinicRole.VIEWER}),
+)

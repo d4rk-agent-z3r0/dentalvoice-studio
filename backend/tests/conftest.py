@@ -10,13 +10,15 @@ from typing import Any
 import httpx
 import pytest
 from fastapi import FastAPI
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, SecretStr
 
 from app.core.config import Environment, ProviderMode, Settings
 from app.main import create_app
 
 # Port 1 on loopback is never a PostgreSQL server: connections are refused immediately.
 UNREACHABLE_DATABASE_URL = "postgresql+asyncpg://nobody:nothing@127.0.0.1:1/none"
+# A fixed signing key for tests only; it protects nothing.
+TEST_JWT_SECRET = "test-only-signing-key-not-a-secret-0123456789"
 
 ClientFactory = Callable[[Settings], AbstractAsyncContextManager[httpx.AsyncClient]]
 
@@ -44,6 +46,7 @@ def make_test_settings(database_url: str, **overrides: Any) -> Settings:
         "log_level": "INFO",
         "cors_origins": ["http://localhost:3000"],
         "db_connect_timeout_seconds": 1.0,
+        "jwt_secret": SecretStr(TEST_JWT_SECRET),
         **overrides,
     }
     return Settings(_env_file=None, **values)

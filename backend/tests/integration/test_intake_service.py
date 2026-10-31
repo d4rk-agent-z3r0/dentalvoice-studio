@@ -112,7 +112,7 @@ async def test_declined_contact_is_explicitly_not_provided(
             for e in await EventRepository(session).list(graph.clinic_id, graph.conversation_id)
         ]
     assert live == {F.EMAIL: (None, IntakeFieldStatus.NOT_PROVIDED)}
-    assert events == ["decline_ignored", "field_declined"]
+    assert events == ["field_declined", "decline_ignored"]  # recorded in request order
 
 
 async def test_low_confidence_values_need_confirmation(

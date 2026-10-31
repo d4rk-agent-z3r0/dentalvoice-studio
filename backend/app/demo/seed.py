@@ -27,11 +27,13 @@ from app.domain.enums import PatientStatus
 from app.models import (
     AppointmentType,
     Clinic,
+    ClinicUser,
     Dentist,
     DentistSchedule,
     Patient,
     SyntheticPersona,
     SyntheticScenario,
+    User,
 )
 from app.repositories.patients import PatientRepository
 from app.schemas.scenario import ScenarioExpectation
@@ -55,6 +57,7 @@ def expectation(scenario: catalog.Scenario) -> ScenarioExpectation:
         final_state=scenario.final_state,
         fields=scenario.fields,
         missing_fields=list(scenario.missing_fields),
+        declined_fields=list(scenario.declined_fields),
         corrected_fields=list(scenario.corrected_fields),
         escalation_reason=scenario.escalation_reason,
     )
@@ -182,6 +185,25 @@ async def _scenarios(
         row.expected = expectation(scenario_spec).model_dump(mode="json")
 
 
+async def _users(session: AsyncSession, clinics: dict[str, uuid.UUID]) -> None:
+    for spec in catalog.DEMO_USERS:
+        user = await session.scalar(select(User).where(User.email == spec.email))
+        if user is None:
+            user = User(email=spec.email, display_name=spec.display_name)
+            session.add(user)
+            await session.flush()
+        for slug, role in spec.roles.items():
+            membership = await session.scalar(
+                select(ClinicUser).where(
+                    ClinicUser.clinic_id == clinics[slug], ClinicUser.user_id == user.id
+                )
+            )
+            if membership is None:
+                session.add(ClinicUser(clinic_id=clinics[slug], user_id=user.id, role=role))
+            else:
+                membership.role = role
+
+
 async def seed(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -191,8 +213,10 @@ async def seed(
     catalog.clip_index()  # fail fast on duplicate clip IDs
     patients_created = slots_created = 0
     async with session_factory.begin() as session:
+        clinic_ids: dict[str, uuid.UUID] = {}
         for spec in catalog.CLINICS:
             clinic = await _clinic(session, spec)
+            clinic_ids[spec.slug] = clinic.id
             await _dentists(session, clinic.id, spec)
             await _appointment_types(session, clinic.id, spec)
             personas, created = await _personas(session, clinic.id, spec)
@@ -203,6 +227,7 @@ async def seed(
             slots_created += await publish_slots(
                 session, clinic.id, spec.timezone, local_today, days
             )
+        await _users(session, clinic_ids)
     return SeedReport(
         clinics=len(catalog.CLINICS),
         scenarios=sum(len(c.scenarios) for c in catalog.CLINICS),

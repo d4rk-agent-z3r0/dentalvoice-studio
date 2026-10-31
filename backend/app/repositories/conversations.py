@@ -24,6 +24,17 @@ class ConversationRepository:
         )
         return await self._session.scalar(stmt)
 
+    async def get_for_update(
+        self, clinic_id: uuid.UUID, conversation_id: uuid.UUID
+    ) -> Conversation | None:
+        """Row-locked read: serialises turn processing for one conversation."""
+        stmt = (
+            select(Conversation)
+            .where(Conversation.clinic_id == clinic_id, Conversation.id == conversation_id)
+            .with_for_update()
+        )
+        return await self._session.scalar(stmt)
+
     async def list(
         self,
         clinic_id: uuid.UUID,

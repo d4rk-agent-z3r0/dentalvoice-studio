@@ -6,17 +6,21 @@ import inspect
 
 import pytest
 
+from app.repositories.clinics import ClinicRepository
 from app.repositories.conversations import ConversationRepository
 from app.repositories.intake import EventRepository, IntakeRepository
 from app.repositories.patients import PatientRepository
 from app.repositories.scenarios import ScenarioRepository
+from app.repositories.turns import TurnRepository
 
 REPOSITORIES = [
+    ClinicRepository,
     ConversationRepository,
     EventRepository,
     IntakeRepository,
     PatientRepository,
     ScenarioRepository,
+    TurnRepository,
 ]
 # These receive an ORM object whose clinic_id the caller has already set.
 UNSCOPED_ALLOWED = {"add", "add_snapshot"}

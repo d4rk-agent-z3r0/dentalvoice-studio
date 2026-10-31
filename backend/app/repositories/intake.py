@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ids import uuid7
 from app.domain.enums import LIVE_INTAKE_STATUSES, IntakeFieldStatus
 from app.models import ConversationEvent, IntakeDraft, IntakeSnapshot
 
@@ -85,7 +86,11 @@ class EventRepository:
         payload: dict[str, Any] | None = None,
     ) -> ConversationEvent:
         event = ConversationEvent(
-            clinic_id=clinic_id, conversation_id=conversation_id, type=type_, payload=payload or {}
+            id=uuid7(),  # assigned now, so the timeline keeps the order events were recorded
+            clinic_id=clinic_id,
+            conversation_id=conversation_id,
+            type=type_,
+            payload=payload or {},
         )
         self._session.add(event)
         return event

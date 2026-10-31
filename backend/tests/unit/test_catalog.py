@@ -62,6 +62,8 @@ def test_scenario_is_internally_consistent(
         if contact_field in scenario.fields:
             assert scenario.fields[contact_field] == value
     assert not set(scenario.missing_fields) & set(scenario.fields)
+    assert not set(scenario.declined_fields) & set(scenario.fields)
+    assert not set(scenario.declined_fields) & set(scenario.missing_fields)
     assert set(scenario.corrected_fields) <= set(scenario.fields)
     assert (scenario.final_state is ConversationState.ESCALATED) == (
         scenario.escalation_reason is not None

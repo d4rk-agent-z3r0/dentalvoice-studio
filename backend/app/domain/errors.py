@@ -34,3 +34,17 @@ class InvalidStateTransitionError(DomainError):
 
 class ConcurrentUpdateError(DomainError):
     code = "CONCURRENT_UPDATE"
+
+
+class ConversationClosedError(DomainError):
+    code = "CONVERSATION_CLOSED"
+
+    def __init__(self) -> None:
+        super().__init__("This conversation has ended.")
+
+
+class ConversationNotStartedError(DomainError):
+    code = "INVALID_STATE_TRANSITION"
+
+    def __init__(self) -> None:
+        super().__init__("Start the conversation before sending caller turns.")

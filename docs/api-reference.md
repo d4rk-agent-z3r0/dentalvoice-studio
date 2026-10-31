@@ -15,12 +15,12 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | HTTP | Codes |
 |---|---|
 | 400 | `VALIDATION_ERROR`, `INVALID_STATE_TRANSITION` |
-| 401 | `AUTH_REQUIRED`, `AUTH_INVALID` |
+| 401 | `AUTH_REQUIRED`, `AUTH_INVALID` (with `WWW-Authenticate: Bearer`) |
 | 403 | `FORBIDDEN` |
 | 404 | `NOT_FOUND` (also returned for other clinics' resources — no existence leak) |
-| 409 | `BOOKING_SLOT_TAKEN`, `IDEMPOTENCY_CONFLICT`, `CONVERSATION_CLOSED` |
+| 409 | `BOOKING_SLOT_TAKEN`, `IDEMPOTENCY_CONFLICT`, `CONVERSATION_CLOSED`, `CONCURRENT_UPDATE`, `DUPLICATE_PATIENT` |
 | 429 | `RATE_LIMITED` |
-| 502/503 | `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE` |
+| 502/503 | `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`, `AUTH_NOT_CONFIGURED` (503) |
 
 ## Health — M1
 
@@ -29,25 +29,37 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | GET | `/health/live` | `200 {"status":"ok"}` — process is up |
 | GET | `/health/ready` | `200 {"status":"ok","database":"ok"}` or `503` when the DB is unreachable |
 
-## Auth — M8 (dev token stub in M2 tests)
+## Auth
 
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/api/v1/auth/login` | `{email,password}` → `{access_token, clinics[]}` (first membership active) |
-| POST | `/api/v1/auth/switch-clinic` | `{clinic_id}` → new token, only if the user is a member |
-| GET | `/api/v1/auth/me` | user, active clinic, role |
+Access tokens are HS256 JWTs signed with `JWT_SECRET` (32+ characters; the app refuses shorter
+keys). Claims: `sub` (user), `clinic_id`, `role`, `iss`, `aud`, `iat`, `exp`, `jti`. Only `HS256`
+is accepted, so unsigned (`alg: none`) and algorithm-confusion tokens are rejected.
 
-## Scenarios & conversations — M2/M3/M5
+| Status | How a token is obtained |
+|---|---|
+| **Shipped (M3)** | `make dev-token EMAIL=demo.staff@example.com CLINIC=brightsmile`: development only, refuses to run in production; reads the user's real membership and role |
+| M8 | `POST /api/v1/auth/login` `{email,password}` → `{access_token, clinics[]}`; `POST /api/v1/auth/switch-clinic`; `GET /api/v1/auth/me` |
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/api/v1/scenarios` | Scenarios for the active clinic |
-| POST | `/api/v1/conversations` | `{scenario_id}` → conversation in `CREATED` |
-| GET | `/api/v1/conversations?state=&limit=&cursor=` | Paginated list |
-| GET | `/api/v1/conversations/{id}` | Turns, events, intake drafts, snapshot |
-| POST | `/api/v1/conversations/{id}/turns` | Text turn for mock/dev (M3); `{text}` only allowed when `ENVIRONMENT=development` |
-| POST | `/api/v1/conversations/{id}/ws-ticket` | → `{ticket, expires_in}` (60 s, single use) |
-| GET | `/api/v1/audio/clips/{clip_id}` | Allow-listed fixture audio (`audio/wav`) |
+Roles: `admin` and `staff` may create and drive conversations; `viewer` is read-only (`403
+FORBIDDEN`).
+
+## Scenarios & conversations — shipped in M3
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| GET | `/api/v1/scenarios` | any | Scenarios of the token's clinic |
+| POST | `/api/v1/conversations` | admin, staff | `{scenario_id}` → `201` conversation in `CREATED`. Unknown fields (e.g. `clinic_id`) are a `400` |
+| GET | `/api/v1/conversations?state=&limit=` | any | Newest first, `limit` 1–100 |
+| GET | `/api/v1/conversations/{id}` | any | Conversation, turns, timeline events, every intake draft (with history), missing fields, snapshot |
+| POST | `/api/v1/conversations/{id}/start` | admin, staff | `CREATED → GREETING`; returns the greeting turn |
+| POST | `/api/v1/conversations/{id}/turns` | admin, staff | `{text}` (1–500 chars). Typed caller turn for development and tests; **`403` when `ENVIRONMENT=production`**, where caller speech only comes from audio fixtures (M5) |
+| POST | `/api/v1/conversations/{id}/end` | admin, staff | Caller hung up: `ABANDONED`; `409 CONVERSATION_CLOSED` if already ended |
+| POST | `/api/v1/conversations/{id}/ws-ticket` | admin, staff | M8: `{ticket, expires_in}` (60 s, single use) |
+| GET | `/api/v1/audio/clips/{clip_id}` | any | M5: allow-listed fixture audio (`audio/wav`) |
+
+A turn response (`TurnResultRead`) carries `previous_state`, `state`, the full `path` of states
+entered in that turn, `state_version`, the receptionist `reply`, `missing_fields`,
+`rejected_fields` (field → reason), `corrected_fields` and the measured `llm_ms`.
 
 ## WebSocket — M5
 
