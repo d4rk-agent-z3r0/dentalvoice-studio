@@ -229,3 +229,56 @@ its reply text is spoken as written. An output filter for claims the application
 
 **Blocked:** live verification against Gemini. Put `GEMINI_API_KEY` and `GEMINI_MODEL` in your local
 `.env`, set `VOICE_PROVIDER_MODE=live`, and record the run in `docs/providers.md`.
+
+## Milestone 6 — Appointment engine
+
+Run 2026-10-31 on branch `feat/m6-booking-engine` against PostgreSQL 16.15 (`postgres:16`
+container) with Python 3.13.18. No migration was added: the schema from Milestone 2 already had the
+exclusion constraint, the per-clinic idempotency key and `appointment_slots`. No dependency was
+added.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(booking)` availability | Slot maths (`test_booking_slots.py`): runs of consecutive open slots, exact cover, gaps, blocked slots, longer blocks never split, adjacent appointments allowed, other dentists unaffected, only future starts, ordering | passed |
+| | Local-day windows: 24 h normal days; 23 h on 2026-03-29 (London) and 2026-03-08 (New York); 25 h on 2026-10-25 (London) and 2026-11-01 (New York); 00:30 BST on 2026-10-25 belongs to the 25th | passed |
+| | Published weekend slots across both London changes: 09:00 local is 09:00Z then 08:00Z (spring) and 08:00Z then 09:00Z (autumn) | passed |
+| | Randomised cross-check, 25 seeded calendars with gaps, blocked and odd-length slots and appointments: availability offers exactly the times the reservation rule accepts | passed; 500 options compared (at least 5 per seed) |
+| | PostgreSQL: 45-minute type offers 10 + 2 starts; active (`confirmed`, `requested`) appointments hide times and `cancelled` ones do not; blocked slots and inactive dentists hidden; past times hidden; unknown, inactive and other clinics' types 404; bad queries 400; DST days in London and New York keep 09:00–11:30 local | passed |
+| `feat(booking)` reservations | Canonical hash: golden SHA-256 of the canonical JSON; the same instant with other offsets, key order, explicit null and UUID case hash the same; any changed field hashes differently; naive times, `clinic_id` and missing fields rejected; key character rules | passed |
+| | Book: `201 confirmed`, row persisted, time leaves availability; replay returns the same body with `Idempotent-Replayed: true` and no new row; different body `409 IDEMPOTENCY_CONFLICT`; a replay after cancel returns the cancelled original; keys scoped per clinic | passed |
+| | Overlap `409 BOOKING_SLOT_TAKEN`; adjacent time and other dentist allowed. Cancel frees the time for a new booking; a second cancel is `409 APPOINTMENT_NOT_ACTIVE` | passed |
+| | Reschedule 15 minutes later (overlapping the original) succeeds with `rescheduled_from_id`; a taken, blocked, unpublished or past target fails and leaves every row's status, start and `updated_at` unchanged | passed |
+| | Misaligned, past-closing, unpublished or unpublished-day start, blocked slot, inactive dentist: `409 SLOT_UNAVAILABLE`; past time rejected (also exactly "now") | passed |
+| | Another clinic's patient, type, dentist, conversation or appointment (cancel, reschedule): `404` naming the resource; their rows unchanged; viewer `403` on every write and `200` on list | passed |
+| | Booking on DST days: 2026-03-29 09:00 London is `08:00Z` / `+01:00`; 2026-10-25 is `09:00Z` / `+00:00`; 2026-11-01 New York is `14:00Z` / `-05:00` | passed |
+| | Mutation: skipped the published-slot check | 7 tests failed as intended; restored |
+| | Mutation: released the original after inserting the replacement | the overlapping reschedule failed as intended; restored |
+| `test(booking)` concurrency | **20 concurrent reservations for one slot, held at a barrier after the calendar read so all 20 transactions are open at once on 20 distinct PostgreSQL backends** | **1 confirmed, 19 `BOOKING_SLOT_TAKEN`, 0 other outcomes, 1 row**, for both identical starts and alternating 09:00/09:15 starts |
+| | 20 concurrent `POST /api/v1/appointments` through the app (pool of 20, no barrier) | one `201`, nineteen `409 BOOKING_SLOT_TAKEN`, one row |
+| | 10 concurrent identical requests sharing one key (barrier) | all 10 return the same appointment, 1 created and 9 replayed, one row |
+| | 4 concurrent different bodies sharing one key, non-overlapping times (barrier) | 1 booked, 3 `IDEMPOTENCY_CONFLICT` |
+| | Reschedule racing a new booking for the same time (barrier) | exactly one wins; when the reschedule loses, the original stays `confirmed` |
+| | 9 reschedules and 1 cancel of one appointment at once | exactly one applied, 9 `APPOINTMENT_NOT_ACTIVE`, state consistent |
+| | No connection left `idle in transaction` afterwards | 0 |
+| | Mutation: dropped `ex_appointments_dentist_no_overlap`, then reran the 20-way race | 20 confirmed, 0 rejected: the constraint is the only thing preventing double booking, as ADR-0004 intends. Schema rebuilt by the next run |
+| | Mutation: removed the key re-read after a lost race | both same-key race tests failed. In 8 runs of the 10-request identical race, all 9 losers were rejected by the **exclusion** constraint every time and never by the key's unique constraint, so mapping only the unique violation to a replay would have answered identical retries with `409 BOOKING_SLOT_TAKEN`. The re-read is what turns them into replays |
+| | Concurrency file 10 consecutive runs; full suite 3 consecutive runs | 8 of 8 passed each time; 533 passed each time |
+
+The concurrency tests exposed no defect, so there is no `fix(booking)` commit. The re-read after a
+lost race was part of the reservation design from the start; the mutation above shows it is
+needed.
+
+| Suite | Result |
+|---|---|
+| Backend unit | 424 passed (77 new) |
+| Backend integration | 109 passed (48 new) |
+| Tool tests (`scripts/tests`) | 18 passed |
+| Coverage (`pytest --cov`, unit + integration) | 94 % of 2,741 statements. Slot maths, idempotency, schemas, the appointments router and the new repositories are 100 %; `reservations.py` reports 87 % and `availability.py` 91 % |
+| Ruff, ruff format, mypy `--strict` (120 files), SPDX headers | clean |
+
+Coverage under-reports lines reached only through the HTTP API. For example, `reservations.py`
+line 231 is the only source of the `Patient not found.` error, which an API test asserts, but it
+is reported as missed. The lines that are genuinely not exercised are defensive: an invalid key
+passed straight to the service (the API validates it first), a missing clinic for a valid token, a
+missing appointment type behind a composite foreign key, and re-raising an integrity error other
+than an overlap.

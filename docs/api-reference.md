@@ -151,7 +151,7 @@ is created as `confirmed`.
 | Outcome | Response |
 |---|---|
 | Booked | `201` |
-| Same key, same body | The original appointment, as it is now, `201` with `Idempotent-Replayed: true`. No new row |
+| Same key, same body (also when the requests race) | The original appointment, as it is now, `201` with `Idempotent-Replayed: true`. No new row |
 | Same key, different body | `409 IDEMPOTENCY_CONFLICT` |
 | Another active appointment of that dentist overlaps | `409 BOOKING_SLOT_TAKEN` (the database exclusion constraint decided) |
 | Past, not exactly covered by open published slots, blocked, or dentist inactive | `409 SLOT_UNAVAILABLE` |
