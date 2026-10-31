@@ -50,7 +50,8 @@ class Settings(BaseSettings):
     gemini_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{2,63}$")
     llm_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     llm_max_attempts: int = Field(default=3, ge=1, le=5)
-    # Live speech (VOICE_PROVIDER_MODE=live): Deepgram. No default model ids (see docs/providers.md).
+    # Live speech (VOICE_PROVIDER_MODE=live): Deepgram. No default model ids
+    # (see docs/providers.md).
     deepgram_api_key: SecretStr | None = None
     stt_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
     tts_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
