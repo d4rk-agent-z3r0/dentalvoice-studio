@@ -50,8 +50,21 @@ class Settings(BaseSettings):
     gemini_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{2,63}$")
     llm_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     llm_max_attempts: int = Field(default=3, ge=1, le=5)
+    # Live speech (VOICE_PROVIDER_MODE=live): Deepgram. No default model ids (see docs/providers.md).
+    deepgram_api_key: SecretStr | None = None
+    stt_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
+    tts_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
+    speech_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
-    @field_validator("jwt_secret", "gemini_api_key", "gemini_model", mode="before")
+    @field_validator(
+        "jwt_secret",
+        "gemini_api_key",
+        "gemini_model",
+        "deepgram_api_key",
+        "stt_model",
+        "tts_model",
+        mode="before",
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         """``KEY=`` in .env (as in .env.example) means "not set", not an empty value."""
