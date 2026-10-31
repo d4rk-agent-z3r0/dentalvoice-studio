@@ -8,7 +8,18 @@ from datetime import date
 from typing import Protocol
 
 from app.domain.enums import ConversationState, IntakeField, Speaker
+from app.integrations.errors import ProviderError, ProviderUnavailableError
 from app.schemas.proposal import TurnProposal
+
+__all__ = [
+    "ConversationModelProvider",
+    "HistoryLine",
+    "ProposalResult",
+    "ProviderError",
+    "ProviderUnavailableError",
+    "TokenUsage",
+    "TurnContext",
+]
 
 
 @dataclass(frozen=True)
@@ -42,23 +53,6 @@ class ProposalResult:
     proposal: TurnProposal
     usage: TokenUsage | None = None  # reported by the provider; never estimated
     attempts: int = 1
-
-
-class ProviderError(Exception):
-    """A provider call failed. Surfaced to the user; never replaced by a mock (ADR-0005)."""
-
-    code = "PROVIDER_ERROR"
-
-    def __init__(self, provider: str, message: str) -> None:
-        super().__init__(f"{provider}: {message}")
-        self.provider = provider
-        self.message = message
-
-
-class ProviderUnavailableError(ProviderError):
-    """Transient: timeouts, rate limits and server errors that persisted through retries."""
-
-    code = "PROVIDER_UNAVAILABLE"
 
 
 class ConversationModelProvider(Protocol):

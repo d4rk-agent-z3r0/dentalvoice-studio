@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: MIT
 from fastapi import APIRouter
 
-from app.api.v1 import appointments, availability, conversations, scenarios
+from app.api.v1 import appointments, audio, availability, conversations, scenarios
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(scenarios.router)
 router.include_router(conversations.router)
 router.include_router(availability.router)
 router.include_router(appointments.router)
+router.include_router(audio.router)

@@ -12,7 +12,7 @@ FRONTEND := frontend
 # Docker Compose and the backend Settings read .env themselves; test-integration reads one key.
 ENV_FILE := .env
 
-.PHONY: help install up migrate seed dev-token down lint typecheck test test-integration test-e2e verify compliance license-check
+.PHONY: help install up migrate seed dev-token audio-fixtures audio-deepgram down lint typecheck test test-integration test-e2e verify compliance license-check
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -32,6 +32,12 @@ seed: ## Load the synthetic demo clinics and scenarios into DATABASE_URL (idempo
 
 dev-token: ## Print a development access token (EMAIL=demo.staff@example.com CLINIC=brightsmile)
 	@cd $(BACKEND) && uv run python -m app.devtools.token --email "$${EMAIL:-demo.staff@example.com}" --clinic "$${CLINIC:-brightsmile}"
+
+audio-fixtures: ## Regenerate committed caller clips with eSpeak NG (needs espeak-ng and ffmpeg)
+	cd $(BACKEND) && uv run python ../scripts/generate_audio_fixtures.py
+
+audio-deepgram: ## Generate natural caller clips locally with Deepgram (DEEPGRAM_API_KEY; never committed)
+	cd $(BACKEND) && uv run python ../scripts/generate_audio_fixtures.py --engine deepgram
 
 down: ## Stop the stack (keeps the database volume)
 	docker compose down

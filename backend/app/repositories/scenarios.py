@@ -34,3 +34,15 @@ class ScenarioRepository:
             SyntheticPersona.clinic_id == clinic_id, SyntheticPersona.id == persona_id
         )
         return await self._session.scalar(stmt)
+
+    async def clinic_has_clip(self, clinic_id: uuid.UUID, clip_id: str) -> bool:
+        """True when one of the clinic's scenarios uses this clip."""
+        stmt = (
+            select(SyntheticScenario.id)
+            .where(
+                SyntheticScenario.clinic_id == clinic_id,
+                SyntheticScenario.clips.contains([clip_id]),
+            )
+            .limit(1)
+        )
+        return await self._session.scalar(stmt) is not None

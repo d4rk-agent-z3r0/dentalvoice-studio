@@ -67,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "Idempotent-Replayed"],
+        expose_headers=["X-Request-ID", "Idempotent-Replayed", "X-Clip-Source"],
     )
     app.add_middleware(RequestIdMiddleware)
     install_error_handlers(app)
