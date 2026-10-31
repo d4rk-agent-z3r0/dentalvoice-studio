@@ -182,6 +182,7 @@ is created as `confirmed`.
 | Same key, same body (also when the requests race) | The original appointment, as it is now, `201` with `Idempotent-Replayed: true`. No new row |
 | Same key, different body | `409 IDEMPOTENCY_CONFLICT` |
 | Another active appointment of that dentist overlaps | `409 BOOKING_SLOT_TAKEN` (the database exclusion constraint decided) |
+| The database aborted the transaction to break a deadlock with a concurrent booking, four times in a row | `409 CONCURRENT_UPDATE`; retry with the same key. (One deadlock is retried internally, so it normally ends as one of the rows above) |
 | Past, not exactly covered by open published slots, blocked, or dentist inactive | `409 SLOT_UNAVAILABLE` |
 | Patient, appointment type (or inactive type), dentist or conversation unknown or another clinic's | `404 NOT_FOUND` naming the resource |
 | Viewer | `403 FORBIDDEN` |

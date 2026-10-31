@@ -29,5 +29,11 @@ decision computed availability directly from `dentist_schedules`. It now reads f
 
 ## Consequences
 The database is the single arbiter. A losing concurrent request receives `409 BOOKING_SLOT_TAKEN`.
+Two inserts racing on the exclusion constraint can deadlock: each finds the other's uncommitted row
+and waits for it, and PostgreSQL aborts one (SQLSTATE `40P01`). As PostgreSQL recommends, the
+aborted transaction is run again in full (bounded: four attempts, with jitter). The retry sees the
+committed winner, so the loser still receives `409 BOOKING_SLOT_TAKEN`; if every attempt is
+aborted, `409 CONCURRENT_UPDATE`, never a 500. (Added 2026-10-31 after the deadlock appeared in
+concurrency tests under load.)
 Slots must be regenerated when schedules change (a service operation, Milestone 6). Tests must run
 against PostgreSQL.

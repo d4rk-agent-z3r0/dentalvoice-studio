@@ -13,6 +13,10 @@ Rules that make double booking impossible and retries safe:
   concurrent replay of the same request returns the original rather than an error.
 * Each method is one transaction, and a result is built only after that transaction has
   committed: nothing is reported as booked, cancelled or rescheduled before the database said so.
+* Two inserts racing on the exclusion constraint can deadlock (each waits for the other's
+  uncommitted row). PostgreSQL aborts one; that whole transaction is retried a bounded number of
+  times (``app.database.retry``), and the retry sees the committed winner, so the loser gets
+  ``BOOKING_SLOT_TAKEN``, never a raw database error.
 """
 
 import uuid
@@ -25,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database.errors import violated_constraint
+from app.database.retry import retry_transaction
 from app.domain.enums import ACTIVE_APPOINTMENT_STATUSES, AppointmentStatus
 from app.domain.errors import (
     AppointmentNotActiveError,
@@ -51,6 +56,7 @@ from app.services.booking.slots import Block, covers_exactly, local_days_window
 
 OVERLAP_CONSTRAINT = "ex_appointments_dentist_no_overlap"
 IDEMPOTENCY_CONSTRAINT = "uq_appointments_clinic_id_idempotency_key"
+TRANSACTION_ATTEMPTS = 4  # one try plus up to three retries after a deadlock
 
 
 @dataclass(frozen=True)
@@ -88,10 +94,15 @@ async def _clinic(session: AsyncSession, clinic_id: uuid.UUID) -> Clinic:
 
 class ReservationService:
     def __init__(
-        self, session_factory: async_sessionmaker[AsyncSession], clock: Clock = utc_now
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        clock: Clock = utc_now,
+        *,
+        attempts: int = TRANSACTION_ATTEMPTS,
     ) -> None:
         self._session_factory = session_factory
         self._clock = clock
+        self._attempts = attempts
 
     async def reserve(
         self, clinic_id: uuid.UUID, request: AppointmentCreate, idempotency_key: str
@@ -103,12 +114,16 @@ class ReservationService:
         replay = await self._replay(clinic_id, idempotency_key, digest)
         if replay is not None:
             return replay
-        try:
+
+        async def transaction() -> tuple[Appointment, str]:
             async with self._session_factory.begin() as session:
                 appointment = await self._insert(
                     session, clinic_id, request, idempotency_key, digest
                 )
-                timezone = (await _clinic(session, clinic_id)).timezone
+                return appointment, (await _clinic(session, clinic_id)).timezone
+
+        try:
+            appointment, timezone = await retry_transaction(transaction, attempts=self._attempts)
             # Committed. Only from here on may the booking be reported as confirmed.
         except IntegrityError as error:
             # Whoever beat us has committed by now (PostgreSQL waits for the conflicting
@@ -136,7 +151,8 @@ class ReservationService:
         """Atomically replace an active appointment with one at ``starts_at`` (same dentist, type
         and patient). If the new time cannot be booked, the original is left exactly as it was."""
         now = self._clock()
-        try:
+
+        async def transaction() -> tuple[Appointment, str]:
             async with self._session_factory.begin() as session:
                 repository = AppointmentRepository(session)
                 old = await self._lock_active(session, clinic_id, appointment_id)
@@ -170,7 +186,10 @@ class ReservationService:
                 repository.add(new)
                 await session.flush()
                 await session.refresh(new)
-                timezone = (await _clinic(session, clinic_id)).timezone
+                return new, (await _clinic(session, clinic_id)).timezone
+
+        try:
+            new, timezone = await retry_transaction(transaction, attempts=self._attempts)
         except IntegrityError as error:
             if violated_constraint(error) == OVERLAP_CONSTRAINT:
                 raise BookingSlotTakenError from error

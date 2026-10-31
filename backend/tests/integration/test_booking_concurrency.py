@@ -69,16 +69,23 @@ def hold_before_insert(monkeypatch: pytest.MonkeyPatch) -> Callable[[int], set[i
     """Make the next ``parties`` bookings wait for each other after their calendar read.
 
     Returns the set of PostgreSQL backend pids that reached the barrier, so a test can prove the
-    transactions were genuinely concurrent and on separate connections.
+    transactions were genuinely concurrent and on separate connections. Only the first ``parties``
+    checks are held: a transaction retried after a deadlock passes straight through, since
+    nobody is left to meet it at the barrier.
     """
 
     def install(parties: int) -> set[int]:
         barrier = asyncio.Barrier(parties)
         backends: set[int] = set()
+        arrivals = 0
         original = ReservationService._require_bookable
 
         async def held(session: AsyncSession, *args: Any) -> None:
+            nonlocal arrivals
             await original(session, *args)
+            arrivals += 1
+            if arrivals > parties:
+                return  # a retry
             pid = await session.scalar(text("SELECT pg_backend_pid()"))
             assert isinstance(pid, int)
             backends.add(pid)
@@ -291,3 +298,127 @@ async def test_released_connections_leave_no_open_transactions(
             )
         )
     assert stuck == 0
+
+
+# --- deadlocks ----------------------------------------------------------------------------------
+#
+# Two inserts racing on the exclusion constraint can each find the other's uncommitted row and
+# wait for it; PostgreSQL then aborts one with ``deadlock detected`` (SQLSTATE 40P01). That window
+# is too narrow to hit on demand, so these tests provoke a real 40P01 inside the booking
+# transaction with advisory locks taken in opposite orders. The database chooses the victim.
+
+
+@pytest.fixture
+def deadlock_first_attempts(monkeypatch: pytest.MonkeyPatch) -> Callable[[], list[int]]:
+    """Once installed, the next two bookable-checks deadlock with each other; later ones run
+    normally. Returns the list of checks made, so a test can see that a retry happened."""
+
+    def install() -> list[int]:
+        calls: list[int] = []
+        barrier = asyncio.Barrier(2)
+        base = uuid.uuid4().int % 2**62  # advisory locks are per database; keep keys unique
+        original = ReservationService._require_bookable
+
+        async def deadlocking(session: AsyncSession, *args: Any) -> None:
+            await original(session, *args)
+            party = len(calls)
+            calls.append(party)
+            if party > 1:
+                return
+            lock = text("SELECT pg_advisory_xact_lock(:key)")
+            await session.execute(lock, {"key": base + party})
+            async with asyncio.timeout(BARRIER_TIMEOUT_S):
+                await barrier.wait()
+            await session.execute(lock, {"key": base + 1 - party})  # each waits for the other
+
+        monkeypatch.setattr(ReservationService, "_require_bookable", staticmethod(deadlocking))
+        return calls
+
+    return install
+
+
+async def test_a_deadlocked_reservation_is_retried_and_both_book(
+    session_factory: SessionFactory,
+    clinic: BookingClinic,
+    deadlock_first_attempts: Callable[[], list[int]],
+) -> None:
+    calls = deadlock_first_attempts()
+    service = ReservationService(session_factory)
+    outcomes = await gather_outcomes(
+        [
+            service.reserve(clinic.clinic_id, request_for(clinic, start), uuid.uuid4().hex)
+            for start in (clinic.at(DAY, 9), clinic.at(DAY, 10))
+        ]
+    )
+
+    assert all(isinstance(o, Reservation) for o in outcomes), outcomes
+    assert len(calls) == 3  # the deadlock victim ran its transaction again
+    assert len(await rows(session_factory, clinic.clinic_id)) == 2
+
+
+async def test_a_deadlocked_reservation_for_a_taken_time_reports_it_taken(
+    session_factory: SessionFactory,
+    clinic: BookingClinic,
+    deadlock_first_attempts: Callable[[], list[int]],
+) -> None:
+    calls = deadlock_first_attempts()
+    service = ReservationService(session_factory)
+    outcomes = await gather_outcomes(
+        [
+            service.reserve(clinic.clinic_id, request_for(clinic, start), uuid.uuid4().hex)
+            for start in (clinic.at(DAY, 9), clinic.at(DAY, 9, 15))
+        ]
+    )
+
+    wins = [o for o in outcomes if isinstance(o, Reservation)]
+    losses = [o for o in outcomes if isinstance(o, BookingSlotTakenError)]
+    assert (len(wins), len(losses)) == (1, 1), outcomes
+    assert len(calls) == 3  # the loser learned the time was taken on its retry
+    assert len(await rows(session_factory, clinic.clinic_id)) == 1
+
+
+async def test_a_deadlocked_reschedule_is_retried(
+    session_factory: SessionFactory,
+    clinic: BookingClinic,
+    deadlock_first_attempts: Callable[[], list[int]],
+) -> None:
+    service = ReservationService(session_factory)
+    original = (
+        await service.reserve(
+            clinic.clinic_id, request_for(clinic, clinic.at(DAY, 9)), uuid.uuid4().hex
+        )
+    ).appointment
+    calls = deadlock_first_attempts()  # after the setup booking
+
+    moved, booked = await gather_outcomes(
+        [
+            service.reschedule(clinic.clinic_id, original.id, clinic.at(DAY, 11)),
+            service.reserve(
+                clinic.clinic_id, request_for(clinic, clinic.at(DAY, 10)), uuid.uuid4().hex
+            ),
+        ]
+    )
+
+    assert not isinstance(moved, BaseException), moved
+    assert isinstance(booked, Reservation), booked
+    assert len(calls) == 3
+    assert moved.rescheduled_from_id == original.id
+
+
+async def test_retries_are_bounded_and_end_as_a_concurrent_update(
+    session_factory: SessionFactory,
+    clinic: BookingClinic,
+    deadlock_first_attempts: Callable[[], list[int]],
+) -> None:
+    deadlock_first_attempts()
+    service = ReservationService(session_factory, attempts=1)  # no retry
+    outcomes = await gather_outcomes(
+        [
+            service.reserve(clinic.clinic_id, request_for(clinic, start), uuid.uuid4().hex)
+            for start in (clinic.at(DAY, 9), clinic.at(DAY, 10))
+        ]
+    )
+
+    # The victim's error is the domain's "try again" (409), never a raw database error (500).
+    assert sorted(type(o).__name__ for o in outcomes) == ["ConcurrentUpdateError", "Reservation"]
+    assert len(await rows(session_factory, clinic.clinic_id)) == 1
