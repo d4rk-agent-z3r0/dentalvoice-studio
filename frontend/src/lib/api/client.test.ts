@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { conversation, scenario, turnResult } from "@/test/fixtures";
 import { errorBody, fakeApi } from "@/test/render";
 
-import { createApiClient, resolveApiBaseUrl } from "./client";
+import { TEXT_TURN_PROBE_ID, createApiClient, resolveApiBaseUrl } from "./client";
 import { ApiError, parseApiError } from "./errors";
 
 const BASE = "http://api.test";
@@ -171,5 +171,77 @@ describe("createApiClient", () => {
     const client = createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl });
     await client.getConversation("a/b");
     expect(api.requests[0].path).toBe("/api/v1/conversations/a%2Fb");
+  });
+});
+
+describe("voice endpoints", () => {
+  const client = (routes: Parameters<typeof fakeApi>[0]) => {
+    const api = fakeApi(routes);
+    return {
+      api,
+      client: createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl }),
+    };
+  };
+
+  it("issues a WebSocket ticket for the conversation", async () => {
+    const { api, client: c } = client({
+      "POST /api/v1/conversations/c-1/ws-ticket": {
+        status: 200,
+        body: { ticket: "tkt_abc", expires_in: 60 },
+      },
+    });
+    await expect(c.issueWsTicket("c-1")).resolves.toEqual({ ticket: "tkt_abc", expires_in: 60 });
+    expect(api.requests[0].headers.get("Authorization")).toBe("Bearer t");
+  });
+
+  it("downloads a caller clip with the bearer token", async () => {
+    const { api, client: c } = client({
+      "GET /api/v1/audio/clips/a-01": { status: 200, body: "RIFF" },
+    });
+    const blob = await c.getClipAudio("/api/v1/audio/clips/a-01");
+    expect(blob.size).toBeGreaterThan(0);
+    expect(api.requests[0].headers.get("Authorization")).toBe("Bearer t");
+    expect(api.requests[0].headers.get("Accept")).toBe("audio/wav");
+  });
+
+  it("refuses to send the token to a clip URL outside the clip endpoint", async () => {
+    const { api, client: c } = client({});
+    for (const path of [
+      "https://evil.example.com/api/v1/audio/clips/a-01",
+      "//evil.example.com/api/v1/audio/clips/a-01",
+      "/api/v1/conversations",
+      "/api/v1/audio/clips/../../conversations",
+    ]) {
+      await expect(c.getClipAudio(path)).rejects.toMatchObject({ code: "UNEXPECTED_RESPONSE" });
+    }
+    expect(api.requests).toHaveLength(0);
+  });
+
+  it("reports a clip 404 with the server's code", async () => {
+    const { client: c } = client({
+      "GET /api/v1/audio/clips/z-99": {
+        status: 404,
+        body: errorBody("NOT_FOUND", "Clip not found."),
+      },
+    });
+    await expect(c.getClipAudio("/api/v1/audio/clips/z-99")).rejects.toMatchObject({
+      status: 404,
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("probes typed turns: 404 on the impossible id means enabled, 403 means disabled", async () => {
+    const path = `POST /api/v1/conversations/${TEXT_TURN_PROBE_ID}/turns`;
+    const enabled = client({ [path]: { status: 404, body: errorBody("NOT_FOUND", "Not found.") } });
+    await expect(enabled.client.textTurnsEnabled()).resolves.toBe(true);
+    expect(enabled.api.requests[0].body).toEqual({ text: "capability probe" });
+
+    const disabled = client({ [path]: { status: 403, body: errorBody("FORBIDDEN", "Disabled.") } });
+    await expect(disabled.client.textTurnsEnabled()).resolves.toBe(false);
+
+    const broken = client({
+      [path]: { status: 503, body: errorBody("PROVIDER_UNAVAILABLE", "Down.") },
+    });
+    await expect(broken.client.textTurnsEnabled()).rejects.toMatchObject({ status: 503 });
   });
 });

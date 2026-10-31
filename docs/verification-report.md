@@ -417,3 +417,52 @@ belongs to the booking engine.
 `STT_MODEL` and `TTS_MODEL` in your local `.env`, set `VOICE_PROVIDER_MODE=live`, run a scenario,
 and record the run in `docs/providers.md`, including the close code Deepgram sends after
 `CloseStream`. The voice session that drives these adapters end to end is built separately.
+
+## Milestone 7 — Voice simulator
+
+### `feat(simulator): implement voice onboarding experience`
+
+Run 2026-10-31 from `frontend/` (Node 22.23.4, pnpm 10.28.0) on top of `26dfbf8` (M5 WebSocket
+streaming). No dependencies were added.
+
+| Check | Command | Result |
+|---|---|---|
+| Install | `pnpm install --frozen-lockfile` | clean |
+| Unit tests | `pnpm test` | 132 passed in 11 files: voice protocol 21, playback 12, call reducer 11, call controller 16, voice simulator UI 14, API client 18 (5 new), auth 13, text simulator 11, conversation detail 10, conversations list 4, demo banner 2 |
+| Mutation check | stale-frame drop disabled in `PcmPlayer.push`; barge-in `interrupt()` removed from `VoiceCall.nextLine` | 3 and 2 tests failed as intended; code restored |
+| ESLint | `pnpm lint` (`--max-warnings=0`) | clean |
+| tsc | `pnpm typecheck` | clean |
+| Next build | `pnpm build` | success; `/simulator` static |
+| SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |
+
+Browser check against the real backend (`VOICE_PROVIDER_MODE` mock: `mock-stt`, `mock-tts`, mock
+conversation provider; `ENVIRONMENT=development`; `VOICE_REALTIME_FACTOR=1`; a dedicated database
+reset with `alembic downgrade base && alembic upgrade head` and seeded with `app.demo.seed --days
+7`; token from `app.devtools.token` for `demo.staff@example.com` at `brightsmile`). Playwright drove
+Chromium (`--autoplay-policy=no-user-gesture-required`) against `next dev` with
+`NEXT_PUBLIC_API_BASE_URL=http://localhost:8012`. An init script counted
+`AudioBufferSourceNode.start/stop`, `HTMLMediaElement.play`, `getUserMedia` and WebSocket URLs.
+
+| Step | Result |
+|---|---|
+| Scenario A entirely by voice: Start call, Next caller line ×8, waiting for each reply and for its audio to finish | final state Completed; the 8 committed caller utterances equal the `a-01`…`a-08` transcripts in `backend/app/demo/catalog.py`; provisional interim text shown while clips played; timeline Greeting → … → Confirmation pending → Completed |
+| Latency table, scenario A | 9 rows (one per receptionist turn); greeting `—` STT, `—` LLM, `2–3 ms` TTS first byte, `—` total; caller turns e.g. `0 ms` / `0 ms` / `1 ms` / `68 ms` (mock providers; values as sent) |
+| Receptionist audio | 100 Web Audio buffers scheduled, 9.66 s of PCM, for scenario A |
+| Caller clips | 8 `<audio>` plays from blob URLs fetched with the bearer token; no blob URL left on the element afterwards |
+| WebSocket admission | one API socket per call, `?ticket=…` only; the access token (or its payload) never appears in the URL |
+| Scenario E (escalation) | final state Escalated; utterance equals the `e-01` transcript; "View conversation details" opens `/conversations/{id}` |
+| Barge-in: Next caller line while the greeting was playing | 17 scheduled buffers stopped; greeting marked "Speech interrupted"; the next caller line still committed |
+| Hang up | final state Abandoned; summary counts 1 barge-in |
+| `getUserMedia` calls | 0 (desktop and mobile) |
+| Horizontal overflow at 390 px | none, mid-call and at the summary |
+| Browser console errors or warnings (voice flows, desktop and mobile) | none |
+| Text mode tab (opened in a separate context) | the development backend accepts typed turns and the text form appears; the capability probe's expected `404` is logged by Chromium as a failed resource |
+
+Screenshots (kept outside the repository): `desktop-1280-start`, `desktop-1280-scenario-a-completed`,
+`desktop-1280-scenario-e-escalated`, `desktop-1280-barge-in`, `mobile-390-start`,
+`mobile-390-mid-call`, `mobile-390-escalated`. Found and fixed from them: at 390 px the latency
+cells wrapped (`0` / `ms` on two lines).
+
+Not verified here: live providers (no Deepgram or Gemini keys; mock mode only), a production build
+served with `next start` against the backend, and screen-reader behaviour beyond the roles, labels
+and live regions the unit tests assert.

@@ -51,7 +51,7 @@ describe("TextSimulator", () => {
     renderSimulator(simulatorApi());
     expect(screen.getByText(TEXT_MODE_LABEL)).toBeInTheDocument();
     expect(TEXT_MODE_LABEL).toBe(
-      "Text mode (development) — synthetic voice playback arrives in Milestone 5",
+      "Text mode (development): typed caller turns without audio. The backend refuses them in production.",
     );
     expect(screen.getByRole("status")).toHaveTextContent("Loading scenarios");
     expect(await screen.findAllByRole("radio")).toHaveLength(2);

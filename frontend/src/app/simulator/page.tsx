@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 import { RequireSession } from "@/components/auth/RequireSession";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { TextSimulator } from "@/features/simulator/TextSimulator";
+import { SimulatorWorkspace } from "@/features/simulator/SimulatorWorkspace";
 
 export const metadata: Metadata = { title: "Simulator" };
 
@@ -13,10 +13,10 @@ export default function SimulatorPage() {
     <>
       <PageHeader
         title="Simulator"
-        description="Drive a synthetic caller through the onboarding call. The receptionist's replies, state and captured fields come from the backend as they are."
+        description="Call a fictional clinic as a synthetic caller. You hear the scripted caller clip and the receptionist's reply; the transcript, state, intake progress and latencies are shown exactly as the server reports them."
       />
       <RequireSession>
-        <TextSimulator />
+        <SimulatorWorkspace />
       </RequireSession>
     </>
   );

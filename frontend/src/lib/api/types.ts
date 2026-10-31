@@ -159,6 +159,13 @@ export interface TurnResult {
   llm_ms: number | null;
 }
 
+/** `TicketRead`: single-use WebSocket admission (ADR-0006). */
+export interface WsTicket {
+  ticket: string;
+  /** Seconds. */
+  expires_in: number;
+}
+
 export interface ListConversationsParams {
   state?: ConversationState;
   /** 1–100; the backend default is 50. */

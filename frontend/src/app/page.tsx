@@ -6,7 +6,7 @@ const SECTIONS = [
   {
     href: "/simulator",
     title: "Simulator",
-    body: "Run a synthetic caller scenario against the receptionist. Text mode for development today; synthetic voice playback arrives in Milestone 5.",
+    body: "Run a synthetic voice caller scenario against the receptionist: hear both sides, watch the state, intake and measured latency.",
     available: true,
   },
   {

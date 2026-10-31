@@ -22,7 +22,7 @@ import { useApiQuery } from "@/lib/api/useApiQuery";
 import { fieldLabel, shortId, stateLabel } from "@/lib/format";
 
 export const TEXT_MODE_LABEL =
-  "Text mode (development) — synthetic voice playback arrives in Milestone 5";
+  "Text mode (development): typed caller turns without audio. The backend refuses them in production.";
 const MAX_TURN_LENGTH = 500; // TextTurnCreate.text max_length
 
 type Phase = "idle" | "starting" | "active" | "ending" | "ended";
