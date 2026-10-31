@@ -68,3 +68,14 @@ be stored even by a buggy code path.
 Published `appointment_slots` are the calendar; availability is open slots minus active
 appointments. Double booking is still decided only by the `appointments` exclusion constraint.
 See the ADR-0004 revision for why the table was added.
+
+## Booking writes (Milestone 6, no schema change)
+
+| Write | Transaction |
+|---|---|
+| Book | Read the slots covering the time `FOR SHARE` (they cannot be blocked mid-booking; concurrent bookings do not wait on each other), insert the appointment as `confirmed`. The exclusion constraint rejects an overlap; `uq_appointments_clinic_id_idempotency_key` rejects a second row for a key |
+| Cancel | `SELECT … FOR UPDATE` the appointment, set `cancelled` |
+| Reschedule | `SELECT … FOR UPDATE`, set the original `rescheduled` and flush (releasing its range), insert the replacement with `rescheduled_from_id` and the server-generated key `reschedule:<original id>`. One transaction: a conflict rolls both back |
+
+Isolation is PostgreSQL's default `READ COMMITTED`. The constraints, not the isolation level, provide
+the guarantees, and a conflicting insert waits for the competing transaction before it fails.

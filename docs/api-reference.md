@@ -18,7 +18,7 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | 401 | `AUTH_REQUIRED`, `AUTH_INVALID` (with `WWW-Authenticate: Bearer`) |
 | 403 | `FORBIDDEN` |
 | 404 | `NOT_FOUND` (also returned for other clinics' resources — no existence leak) |
-| 409 | `BOOKING_SLOT_TAKEN`, `IDEMPOTENCY_CONFLICT`, `CONVERSATION_CLOSED`, `CONCURRENT_UPDATE`, `DUPLICATE_PATIENT` |
+| 409 | `BOOKING_SLOT_TAKEN`, `SLOT_UNAVAILABLE`, `IDEMPOTENCY_CONFLICT`, `APPOINTMENT_NOT_ACTIVE`, `CONVERSATION_CLOSED`, `CONCURRENT_UPDATE`, `DUPLICATE_PATIENT` |
 | 429 | `RATE_LIMITED` |
 | 502/503 | `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`, `AUTH_NOT_CONFIGURED` (503) |
 
@@ -113,15 +113,77 @@ booked (`409 BOOKING_SLOT_TAKEN`).
 Slots are ordered by start time, then dentist. `starts_at`/`ends_at` are UTC; the `*_local` strings
 are the same instants in the clinic's timezone, with their offset.
 
-## Patients, appointments, analytics — M6/M7
+## Appointments — shipped in M6
+
+| Method | Path | Role | Success |
+|---|---|---|---|
+| GET | `/api/v1/appointments?from=&to=&status=&limit=` | any | `200` list |
+| POST | `/api/v1/appointments` | admin, staff | `201` appointment |
+| POST | `/api/v1/appointments/{id}/cancel` | admin, staff | `200` appointment (`cancelled`) |
+| POST | `/api/v1/appointments/{id}/reschedule` | admin, staff | `201` the **new** appointment |
+
+Every write is one PostgreSQL transaction, and the response is built only after it has committed:
+a `2xx` means the database holds the result, and any failure is an error response.
+
+**Appointment** (all responses):
+
+```json
+{ "id": "…", "patient_id": "…", "dentist_id": "…", "appointment_type_id": "…",
+  "conversation_id": null, "rescheduled_from_id": null, "status": "confirmed",
+  "starts_at": "2030-01-07T09:00:00Z", "ends_at": "2030-01-07T09:30:00Z",
+  "starts_at_local": "2030-01-07T09:00:00+00:00", "ends_at_local": "2030-01-07T09:30:00+00:00",
+  "timezone": "Europe/London", "created_at": "…", "updated_at": "…" }
+```
+
+### `POST /api/v1/appointments`
+
+Header `Idempotency-Key`: required, 8–128 characters from `A-Z a-z 0-9 _ -`. Body:
+
+```json
+{ "patient_id": "…", "appointment_type_id": "…", "dentist_id": "…",
+  "starts_at": "2030-01-07T09:00:00Z", "conversation_id": null }
+```
+
+`starts_at` needs an explicit offset (a naive time is a `400`) and is stored in UTC; `ends_at` is
+`starts_at` plus the type's duration. Unknown fields such as `clinic_id` are a `400`. The appointment
+is created as `confirmed`.
+
+| Outcome | Response |
+|---|---|
+| Booked | `201` |
+| Same key, same body | The original appointment, as it is now, `201` with `Idempotent-Replayed: true`. No new row |
+| Same key, different body | `409 IDEMPOTENCY_CONFLICT` |
+| Another active appointment of that dentist overlaps | `409 BOOKING_SLOT_TAKEN` (the database exclusion constraint decided) |
+| Past, not exactly covered by open published slots, blocked, or dentist inactive | `409 SLOT_UNAVAILABLE` |
+| Patient, appointment type (or inactive type), dentist or conversation unknown or another clinic's | `404 NOT_FOUND` naming the resource |
+| Viewer | `403 FORBIDDEN` |
+
+The body hash is SHA-256 of the canonical JSON of the validated body (sorted keys, UTC instant,
+`conversation_id` always present), so the same instant written with another offset is the same
+request. Keys are scoped to the clinic. A request that failed stored nothing, so retrying its key
+runs it again.
+
+### Cancel and reschedule
+
+`POST …/{id}/cancel`, no body: `confirmed`/`requested` → `cancelled`; the time becomes bookable
+again. `POST …/{id}/reschedule` `{"starts_at": "…"}`: same patient, dentist and type. In one
+transaction the original becomes `rescheduled` and a new `confirmed` appointment with
+`rescheduled_from_id` is created, so the new time may overlap the old one. If the new time is
+taken (`409 BOOKING_SLOT_TAKEN`) or not bookable (`409 SLOT_UNAVAILABLE`), nothing changes. Either
+call on an appointment that is no longer active is `409 APPOINTMENT_NOT_ACTIVE`; another clinic's
+appointment is `404`.
+
+### List
+
+`from` and `to` are clinic-local days (`YYYY-MM-DD`, both inclusive, `to` ≥ `from`), filtering on
+`starts_at`; `status` is one of `requested`, `confirmed`, `cancelled`, `rescheduled`; `limit` 1–200
+(default 100). Ordered by `starts_at`.
+
+## Patients, analytics — M7
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/patients?q=&status=` | Search + filter |
 | GET | `/api/v1/patients/{id}` | Profile, snapshots, conversations, appointments |
-| GET | `/api/v1/appointments?from=&to=&status=` | |
-| POST | `/api/v1/appointments` | Header `Idempotency-Key` required; same key + same body → same result; different body → `409 IDEMPOTENCY_CONFLICT` |
-| POST | `/api/v1/appointments/{id}/cancel` | |
-| POST | `/api/v1/appointments/{id}/reschedule` | `{starts_at}` atomic cancel-and-create |
 | GET | `/api/v1/analytics/summary` | Counts, completion rate, avg duration from persisted data |
 | GET | `/api/v1/analytics/latency` | p50/p95 of measured stage timings |
