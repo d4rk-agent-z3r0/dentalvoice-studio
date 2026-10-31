@@ -282,3 +282,45 @@ is reported as missed. The lines that are genuinely not exercised are defensive:
 passed straight to the service (the API validates it first), a missing clinic for a valid token, a
 missing appointment type behind a composite foreign key, and re-raising an integrity error other
 than an overlap.
+
+## Milestone 7 — Frontend foundation
+
+### `feat(ui): build DentalVoice application foundation`
+
+Run 2026-10-31 from `frontend/` (Node 22.23.4, pnpm 10.28.0). No dependencies were added.
+
+| Check | Command | Result |
+|---|---|---|
+| Install | `pnpm install --frozen-lockfile` | clean |
+| Unit tests | `pnpm test` | 53 passed in 6 files: API client 13, auth context and header 13, conversations list 4, conversation detail 10, text simulator 11, demo banner 2 |
+| Mutation check | `formatMs` made to print `0 ms` for unmeasured turns; rejection reason hidden | 3 tests failed as intended; code restored |
+| ESLint | `pnpm lint` (`--max-warnings=0`) | clean |
+| tsc | `pnpm typecheck` | clean |
+| Next build | `pnpm build` | success: `/`, `/simulator`, `/conversations`, `/patients`, `/appointments`, `/analytics` static; `/conversations/[id]` partial prerender |
+| SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |
+
+Browser check against the real backend (mock provider mode, `ENVIRONMENT=development`, a
+dedicated empty database migrated and seeded with `app.demo.seed --days 7`, a token from
+`app.devtools.token` for `demo.staff@example.com` at `brightsmile`). Playwright drove Chromium against
+`next dev` and again against a production build (`NEXT_PUBLIC_API_BASE_URL=http://localhost:8010
+pnpm build`, served with `next start`):
+
+| Step | Result |
+|---|---|
+| Developer sign-in with the pasted token | header shows clinic id and role `staff` |
+| Scenario A through the text simulator, 8 caller lines | states Identity → Contact details → Contact details → Visit reason → Appointment preferences → Information review → Confirmation pending → Completed |
+| Conversation detail | 17 turns; 9 state changes; 10 intake fields `confirmed`; missing fields none; snapshot Ava Lindqvist, `ava.lindqvist@example.com`, `+1-555-0101`, Tue 3 Nov 2026 10:00; receptionist LLM latency `—` for the greeting, measured values (0–1 ms, mock) elsewhere |
+| Conversations list filter `COMPLETED` | URL `?state=COMPLETED`, only completed calls listed |
+| Horizontal overflow at 1280 px and 390 px | none (`scrollWidth == clientWidth`) |
+| Sign out | returns to the sign-in screen |
+| Browser console errors or warnings | none |
+
+Screenshots (kept outside the repository): `01-sign-in-desktop`, `02-simulator-scenarios-desktop`,
+`03-simulator-completed-desktop`, `04-conversation-detail-desktop`, `05-conversations-desktop`,
+`06-conversation-detail-mobile`, `07-conversations-mobile`, `08-simulator-mobile`,
+`09-patients-mobile` (`-prod` suffix for the production-build run). Found and fixed from them: on a
+390 px screen the intake table hid the status column off-screen and the navigation clipped
+"Appointments"; the simulator's status panel stretched to the transcript's height.
+
+Not verified here: the Docker image build with the new pages, and screen-reader behaviour beyond
+the semantic roles and labels the unit tests assert.
