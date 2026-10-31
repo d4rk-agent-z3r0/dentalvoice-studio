@@ -1,8 +1,7 @@
 # Database Design
 
-> Status: **Implemented (Milestone 2)** in Alembic revision `293745f95565`
-> (`backend/migrations/versions/20261031_0001_core_domain_schema.py`). `ws_tickets` arrives with
-> Milestone 8.
+> Status: **Implemented.** Alembic revisions `293745f95565` (core schema, Milestone 2) and
+> `7c1e2a9d4b10` (intake `not_provided`, Milestone 3). `ws_tickets` arrives with Milestone 8.
 
 ## Conventions
 
@@ -32,7 +31,7 @@
 | `conversations` | One simulated call | `(clinic_id, scenario_id)` and `(clinic_id, patient_id)` FKs, `state` (12 states), `state_version` ≥ 1 (optimistic lock), `provider_mode`, `turn_count`, `started_at`, `ended_at`; CHECK: `ended_at` is set **iff** the state is terminal |
 | `conversation_turns` | Committed utterances | `seq` (uq per conversation), `speaker` ∈ {`caller`,`receptionist`}, `text`, `clip_id`, non-negative `stt_ms`/`llm_ms`/`tts_ms`/`total_ms` |
 | `conversation_events` | Append-only timeline | `type` (`state_changed`, `field_proposed`, `field_rejected`, `provider_error`, `escalated`, …), `payload` jsonb object |
-| `intake_drafts` | Per-field proposals with provenance | `field`, `value`, `status` ∈ {`provided`,`needs_confirmation`,`confirmed`,`rejected`,`superseded`}, `(clinic_id, source_turn_id)` FK, `confidence` 0–1; CHECK: rejected **iff** `rejection_reason`; partial unique: at most one live value per field |
+| `intake_drafts` | Per-field proposals with provenance | `field`, `value`, `status` ∈ {`provided`,`not_provided`,`needs_confirmation`,`confirmed`,`rejected`,`superseded`}, `(clinic_id, source_turn_id)` FK, `confidence` 0–1; CHECKs: rejected **iff** `rejection_reason`, `not_provided` **iff** no value; partial unique: at most one live value per field. A field never mentioned has no row; a declined one has a `not_provided` row |
 | `intake_snapshots` | Immutable confirmed intake, separate from drafts | `conversation_id` (uq), `data` jsonb object, `confirmed_at` |
 | `appointments` | Booking | composite FKs to patient, dentist, appointment type, conversation and `rescheduled_from`; `status` ∈ {`requested`,`confirmed`,`cancelled`,`rescheduled`}; `idempotency_key` (8–128 chars), `request_hash` |
 | `ws_tickets` | Single-use WS auth (Milestone 8) | `jti` (pk), `user_id`, `clinic_id`, `conversation_id`, `expires_at`, `used_at` |

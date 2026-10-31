@@ -7,12 +7,19 @@ import inspect
 import pytest
 
 from app.repositories.conversations import ConversationRepository
+from app.repositories.intake import EventRepository, IntakeRepository
 from app.repositories.patients import PatientRepository
 from app.repositories.scenarios import ScenarioRepository
 
-REPOSITORIES = [ConversationRepository, PatientRepository, ScenarioRepository]
-# ``add`` receives an ORM object whose clinic_id the caller has already set.
-UNSCOPED_ALLOWED = {"add"}
+REPOSITORIES = [
+    ConversationRepository,
+    EventRepository,
+    IntakeRepository,
+    PatientRepository,
+    ScenarioRepository,
+]
+# These receive an ORM object whose clinic_id the caller has already set.
+UNSCOPED_ALLOWED = {"add", "add_snapshot"}
 
 
 def _public_methods(cls: type) -> list[str]:

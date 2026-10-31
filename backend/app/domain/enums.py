@@ -50,13 +50,26 @@ class IntakeField(StrEnum):
 
 
 class IntakeFieldStatus(StrEnum):
-    """The four extraction outcomes from the spec, plus history for corrections."""
+    """Extraction outcomes. The spec's four categories map to: provided / confirmed (explicitly
+    provided), not_provided (caller declined; a field never mentioned has no row at all),
+    needs_confirmation, and rejected. Superseded rows keep the history of corrections."""
 
     PROVIDED = "provided"
+    NOT_PROVIDED = "not_provided"
     NEEDS_CONFIRMATION = "needs_confirmation"
     CONFIRMED = "confirmed"
     REJECTED = "rejected"
     SUPERSEDED = "superseded"
+
+
+LIVE_INTAKE_STATUSES = frozenset(
+    {
+        IntakeFieldStatus.PROVIDED,
+        IntakeFieldStatus.NOT_PROVIDED,
+        IntakeFieldStatus.NEEDS_CONFIRMATION,
+        IntakeFieldStatus.CONFIRMED,
+    }
+)
 
 
 class PatientType(StrEnum):

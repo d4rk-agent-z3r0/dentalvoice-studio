@@ -29,6 +29,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.config import ProviderMode
 from app.domain.enums import (
+    LIVE_INTAKE_STATUSES,
     TERMINAL_STATES,
     ConversationState,
     IntakeField,
@@ -37,7 +38,8 @@ from app.domain.enums import (
 )
 from app.models.base import Base, CreatedAt, Timestamps, UUIDPrimaryKey, enum_check, str_enum
 
-_TERMINAL = ", ".join(f"'{s.value}'" for s in TERMINAL_STATES)
+_TERMINAL = ", ".join(f"'{s.value}'" for s in sorted(TERMINAL_STATES))
+_LIVE = ", ".join(f"'{s.value}'" for s in sorted(LIVE_INTAKE_STATUSES))
 
 
 def _conversation_fk() -> ForeignKeyConstraint:
@@ -151,13 +153,14 @@ class IntakeDraft(UUIDPrimaryKey, Timestamps, Base):
         CheckConstraint(
             "(status = 'rejected') = (rejection_reason IS NOT NULL)", name="rejection_has_reason"
         ),
+        CheckConstraint("(status = 'not_provided') = (value IS NULL)", name="value_presence"),
         # At most one live value per field; rejected and superseded rows are history.
         Index(
             "uq_intake_drafts_live_field",
             "conversation_id",
             "field",
             unique=True,
-            postgresql_where=text("status IN ('provided', 'needs_confirmation', 'confirmed')"),
+            postgresql_where=text(f"status IN ({_LIVE})"),
         ),
     )
 
