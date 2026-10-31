@@ -5,7 +5,8 @@
     uv run python -m app.devtools.token --email demo.staff@example.com --clinic brightsmile
 
 Prints the token on stdout. Membership is read from the database, so the token carries the role
-the user actually holds in that clinic. Replaced by the login endpoint in Milestone 8.
+the user actually holds in that clinic. Outside development, sign in with
+``POST /api/v1/auth/login`` instead.
 """
 
 import argparse

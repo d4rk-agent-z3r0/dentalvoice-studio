@@ -15,7 +15,7 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | HTTP | Codes |
 |---|---|
 | 400 | `VALIDATION_ERROR`, `INVALID_STATE_TRANSITION` |
-| 401 | `AUTH_REQUIRED`, `AUTH_INVALID` (with `WWW-Authenticate: Bearer`) |
+| 401 | `AUTH_REQUIRED`, `AUTH_INVALID`, `AUTH_FAILED` (sign-in) (with `WWW-Authenticate: Bearer`) |
 | 403 | `FORBIDDEN` |
 | 404 | `NOT_FOUND` (also returned for other clinics' resources — no existence leak) |
 | 409 | `BOOKING_SLOT_TAKEN`, `SLOT_UNAVAILABLE`, `IDEMPOTENCY_CONFLICT`, `APPOINTMENT_NOT_ACTIVE`, `CONVERSATION_CLOSED`, `CONCURRENT_UPDATE`, `DUPLICATE_PATIENT` |
@@ -35,10 +35,42 @@ Access tokens are HS256 JWTs signed with `JWT_SECRET` (32+ characters; the app r
 keys). Claims: `sub` (user), `clinic_id`, `role`, `iss`, `aud`, `iat`, `exp`, `jti`. Only `HS256`
 is accepted, so unsigned (`alg: none`) and algorithm-confusion tokens are rejected.
 
-| Status | How a token is obtained |
-|---|---|
-| **Shipped (M3)** | `make dev-token EMAIL=demo.staff@example.com CLINIC=brightsmile`: development only, refuses to run in production; reads the user's real membership and role |
-| M8 | `POST /api/v1/auth/login` `{email,password}` → `{access_token, clinics[]}`; `POST /api/v1/auth/switch-clinic`; `GET /api/v1/auth/me` |
+Every request re-checks the token's user and membership in the database. A user who was
+deactivated, removed from the clinic or given another role since the token was issued gets `401
+AUTH_INVALID` at once, not when the token expires.
+
+### Shipped in M8
+
+| Method | Path | Token | Response |
+|---|---|---|---|
+| POST | `/api/v1/auth/login` | none | `{email, password}` → session (below) |
+| POST | `/api/v1/auth/switch-clinic` | yes | `{clinic_id}` → session for that clinic; `403 FORBIDDEN` if not a member |
+| GET | `/api/v1/auth/me` | yes | `{user, clinic, role, clinics}`, read from the database |
+
+```json
+{ "access_token": "<JWT>", "token_type": "bearer", "expires_in": 3600,
+  "user": { "id": "…", "email": "demo.staff@example.com", "display_name": "Demo Staff" },
+  "clinic": { "id": "…", "name": "BrightSmile Dental Studio", "timezone": "Europe/London" },
+  "role": "staff",
+  "clinics": [ { "id": "…", "name": "BrightSmile Dental Studio", "role": "staff" } ] }
+```
+
+- `clinics` lists every clinic the user belongs to, sorted by name. Login issues the token for the
+  first one; `switch-clinic` issues a new token for another one.
+- Sign-in failures are all `401 AUTH_FAILED` "Email or password is incorrect.": unknown email,
+  wrong password, inactive user, no password set, no clinic. Each costs the same password check,
+  so neither the message nor the timing reveals which accounts exist.
+- The email is matched case-insensitively. A malformed body is `400 VALIDATION_ERROR`, which never
+  echoes the submitted values. Passwords longer than 128 characters are refused.
+- Token responses carry `Cache-Control: no-store`. There is no logout endpoint: tokens are
+  short-lived (`JWT_TTL_MINUTES`, default 60), and signing out discards the token in the browser.
+- Passwords are stored as argon2id hashes (RFC 9106 low-memory profile). A hash made with older
+  parameters is upgraded at the next successful sign-in. Neither passwords nor emails are logged.
+- Demo users get a password only from `DEMO_PASSWORD` in your local `.env`, applied by `make seed`.
+  No password is committed anywhere.
+
+`make dev-token EMAIL=demo.staff@example.com CLINIC=brightsmile` still issues a token without a
+password, for development only. It refuses to run in production.
 
 Roles: `admin` and `staff` may create and drive conversations; `viewer` is read-only (`403
 FORBIDDEN`).

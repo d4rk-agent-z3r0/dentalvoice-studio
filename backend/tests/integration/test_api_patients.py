@@ -38,8 +38,10 @@ async def clinic(session_factory: SessionFactory) -> BookingClinic:
     return await build_booking_clinic(session_factory)
 
 
-def viewer(settings: Settings, clinic: BookingClinic) -> dict[str, str]:
-    return headers_for(settings, clinic.clinic_id, ClinicRole.VIEWER)
+async def viewer(
+    session_factory: SessionFactory, settings: Settings, clinic: BookingClinic
+) -> dict[str, str]:
+    return await headers_for(session_factory, settings, clinic.clinic_id, ClinicRole.VIEWER)
 
 
 async def _names(client: httpx.AsyncClient, headers: dict[str, str], query: str) -> list[str]:
@@ -58,7 +60,7 @@ async def test_search_matches_name_full_name_and_email_case_insensitively(
     await add_patient(session_factory, cid, "Ava", "Lindqvist", email="ava.l@example.com")
     await add_patient(session_factory, cid, "Bo", "Avalon", phone="+1-555-0142")
     await add_patient(session_factory, cid, "Cy", "Okafor", email="cy_100%@example.org")
-    headers = viewer(database_settings, clinic)
+    headers = await viewer(session_factory, database_settings, clinic)
 
     # Ordered by last name, then first name.
     assert await _names(client, headers, "") == [
@@ -103,7 +105,7 @@ async def test_status_filter_and_pagination(
         email="old@example.com",
         status=PatientStatus.ARCHIVED,
     )
-    headers = viewer(database_settings, clinic)
+    headers = await viewer(session_factory, database_settings, clinic)
 
     assert await _names(client, headers, "?status=archived") == ["Old Archived"]
     assert await _names(client, headers, "?status=prospective") == ["Robin Example"]
@@ -174,7 +176,7 @@ async def test_profile_links_conversations_snapshots_and_appointments(
         session_factory, cid, scenario_id, state=ConversationState.CREATED, created_at=T0
     )
 
-    staff = headers_for(database_settings, cid, ClinicRole.STAFF)
+    staff = await headers_for(session_factory, database_settings, cid, ClinicRole.STAFF)
     booked = await client.post(
         "/api/v1/appointments",
         json={
@@ -194,7 +196,8 @@ async def test_profile_links_conversations_snapshots_and_appointments(
     assert moved.status_code == 201, moved.text
 
     response = await client.get(
-        f"/api/v1/patients/{patient_id}", headers=viewer(database_settings, clinic)
+        f"/api/v1/patients/{patient_id}",
+        headers=await viewer(session_factory, database_settings, clinic),
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -227,10 +230,14 @@ async def test_profile_links_conversations_snapshots_and_appointments(
 
 
 async def test_a_patient_without_history_has_empty_lists(
-    client: httpx.AsyncClient, clinic: BookingClinic, database_settings: Settings
+    client: httpx.AsyncClient,
+    clinic: BookingClinic,
+    database_settings: Settings,
+    session_factory: SessionFactory,
 ) -> None:
     response = await client.get(
-        f"/api/v1/patients/{clinic.patient_id}", headers=viewer(database_settings, clinic)
+        f"/api/v1/patients/{clinic.patient_id}",
+        headers=await viewer(session_factory, database_settings, clinic),
     )
     body = response.json()
     assert response.status_code == 200
@@ -245,8 +252,10 @@ async def test_other_clinics_patients_are_invisible(
 ) -> None:
     other = await build_booking_clinic(session_factory)
     empty = await build_booking_clinic(session_factory)
-    mine = viewer(database_settings, clinic)
-    theirs = headers_for(database_settings, other.clinic_id, ClinicRole.ADMIN)
+    mine = await viewer(session_factory, database_settings, clinic)
+    theirs = await headers_for(
+        session_factory, database_settings, other.clinic_id, ClinicRole.ADMIN
+    )
 
     listed = await client.get("/api/v1/patients", headers=theirs)
     assert [p["id"] for p in listed.json()] == [str(other.patient_id)]
@@ -267,7 +276,9 @@ async def test_other_clinics_patients_are_invisible(
     # A clinic with no patients at all.
     async with session_factory.begin() as session:
         await session.execute(delete(Patient).where(Patient.clinic_id == empty.clinic_id))
-    nobody = headers_for(database_settings, empty.clinic_id, ClinicRole.VIEWER)
+    nobody = await headers_for(
+        session_factory, database_settings, empty.clinic_id, ClinicRole.VIEWER
+    )
     assert (await client.get("/api/v1/patients", headers=nobody)).json() == []
 
 

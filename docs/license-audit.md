@@ -1,7 +1,8 @@
 # Licence Audit
 
 > Audit date: 2026-10-30, at the end of the licensing milestone. Updated 2026-10-31 for the
-> Milestone 3 (PyJWT) and Milestone 4 (google-genai and its dependencies) additions.
+> Milestone 3 (PyJWT) and Milestone 4 (google-genai and its dependencies) additions, and for
+> Milestone 8 (argon2-cffi 25.1.0 and argon2-cffi-bindings 26.1.0, both MIT per their metadata).
 > Statuses: **Verified** · **Requires manual review** · **Not applicable** · **Blocked**.
 > This audit does **not** declare the repository fully licence-compliant. The open items in §3
 > are unresolved.
@@ -29,12 +30,12 @@ need. Both SBOMs validate against the CycloneDX 1.6 JSON schema
 
 | Ecosystem | Runtime | Dev / build | Other-platform optional | Total |
 |---|---|---|---|---|
-| Python | 45 | 15 | — | 60 |
+| Python | 47 | 15 | — | 62 |
 | npm | 67 | 373 | 96 | 536 |
 
 | Category | Count | Meaning |
 |---|---|---|
-| allowed | 554 | Permissive licence on the policy allow-list |
+| allowed | 556 | Permissive licence on the policy allow-list |
 | conditional-reviewed | 42 | MPL-2.0, LGPL-3.0-or-later or CC-BY-4.0, each with a recorded review decision |
 | conditional-unreviewed | 0 | — |
 | disallowed | 0 | — |

@@ -111,11 +111,16 @@ async def busy_clinic(session_factory: SessionFactory) -> uuid.UUID:
 
 
 async def test_summary_counts_rates_and_durations_from_persisted_rows(
-    client: httpx.AsyncClient, busy_clinic: uuid.UUID, database_settings: Settings
+    client: httpx.AsyncClient,
+    busy_clinic: uuid.UUID,
+    database_settings: Settings,
+    session_factory: SessionFactory,
 ) -> None:
     response = await client.get(
         "/api/v1/analytics/summary",
-        headers=headers_for(database_settings, busy_clinic, ClinicRole.VIEWER),
+        headers=await headers_for(
+            session_factory, database_settings, busy_clinic, ClinicRole.VIEWER
+        ),
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -143,9 +148,12 @@ async def test_summary_counts_rates_and_durations_from_persisted_rows(
 
 
 async def test_latency_percentiles_on_known_timings(
-    client: httpx.AsyncClient, busy_clinic: uuid.UUID, database_settings: Settings
+    client: httpx.AsyncClient,
+    busy_clinic: uuid.UUID,
+    database_settings: Settings,
+    session_factory: SessionFactory,
 ) -> None:
-    headers = headers_for(database_settings, busy_clinic, ClinicRole.STAFF)
+    headers = await headers_for(session_factory, database_settings, busy_clinic, ClinicRole.STAFF)
 
     async def stages(query: str = "") -> dict[str, dict[str, object]]:
         response = await client.get(f"/api/v1/analytics/latency{query}", headers=headers)
@@ -178,7 +186,7 @@ async def test_an_empty_clinic_reports_nothing_measured_rather_than_zero(
     database_settings: Settings,
 ) -> None:
     empty = (await build_booking_clinic(session_factory)).clinic_id
-    headers = headers_for(database_settings, empty, ClinicRole.VIEWER)
+    headers = await headers_for(session_factory, database_settings, empty, ClinicRole.VIEWER)
 
     summary = (await client.get("/api/v1/analytics/summary", headers=headers)).json()
     assert summary["conversations_total"] == 0
@@ -205,7 +213,7 @@ async def test_turns_without_any_timing_give_null_percentiles(
 
     response = await client.get(
         "/api/v1/analytics/latency",
-        headers=headers_for(database_settings, clinic, ClinicRole.ADMIN),
+        headers=await headers_for(session_factory, database_settings, clinic, ClinicRole.ADMIN),
     )
     assert all(
         stage["samples"] == 0 and stage["p50_ms"] is None and stage["p95_ms"] is None
@@ -213,7 +221,7 @@ async def test_turns_without_any_timing_give_null_percentiles(
     )
     summary = await client.get(
         "/api/v1/analytics/summary",
-        headers=headers_for(database_settings, clinic, ClinicRole.ADMIN),
+        headers=await headers_for(session_factory, database_settings, clinic, ClinicRole.ADMIN),
     )
     # One call in progress, none ended yet: no completion rate.
     assert (summary.json()["in_progress"], summary.json()["completion_rate"]) == (1, None)
@@ -235,7 +243,7 @@ async def test_figures_are_scoped_to_the_tokens_clinic(
         seconds=30,
         turns=[TurnTimings(llm_ms=5)],
     )
-    headers = headers_for(database_settings, other, ClinicRole.VIEWER)
+    headers = await headers_for(session_factory, database_settings, other, ClinicRole.VIEWER)
 
     summary = (await client.get("/api/v1/analytics/summary", headers=headers)).json()
     assert (summary["conversations_total"], summary["completion_rate"]) == (1, 1.0)

@@ -17,9 +17,11 @@ from app.models import (
     AppointmentSlot,
     AppointmentType,
     Clinic,
+    ClinicUser,
     Dentist,
     DentistSchedule,
     Patient,
+    User,
 )
 from app.services.calendar import publish_slots
 
@@ -125,6 +127,20 @@ async def set_slot_status(
         assert len(result.all()) == 1, "no such slot"
 
 
-def headers_for(settings: Settings, clinic_id: uuid.UUID, role: ClinicRole) -> dict[str, str]:
-    token = issue_access_token(settings, Principal(uuid.uuid4(), clinic_id, role))
+async def headers_for(
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    clinic_id: uuid.UUID,
+    role: ClinicRole,
+) -> dict[str, str]:
+    """A bearer header for a new user holding ``role`` in the clinic.
+
+    The user really exists: every request re-checks the token's user and membership.
+    """
+    async with session_factory.begin() as session:
+        user = User(email=f"user-{uuid.uuid4().hex[:12]}@example.com", display_name="Test User")
+        session.add(user)
+        await session.flush()
+        session.add(ClinicUser(clinic_id=clinic_id, user_id=user.id, role=role))
+    token = issue_access_token(settings, Principal(user.id, clinic_id, role))
     return {"Authorization": f"Bearer {token}"}

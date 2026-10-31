@@ -10,6 +10,8 @@ from typing import Literal
 from pydantic import Field, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.passwords import validate_new_password
+
 # Repository-root .env (backend/app/core/config.py -> repo root). Absent inside containers, where
 # configuration comes from real environment variables. Environment variables always win.
 REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -43,6 +45,9 @@ class Settings(BaseSettings):
     # it, and a weak key is rejected at startup.
     jwt_secret: SecretStr | None = None
     jwt_ttl_minutes: int = Field(default=60, ge=1, le=24 * 60)
+    # Password for the seeded demo users (`make seed`). Local .env only, never committed. Unset
+    # means the demo users get no password and cannot sign in with one.
+    demo_password: SecretStr | None = None
     booking_horizon_days: int = Field(default=60, ge=1, le=365)
     # Live conversation model (VOICE_PROVIDER_MODE=live). Model ids change over time, so there is
     # no default: the operator names the model explicitly (see docs/providers.md).
@@ -62,6 +67,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "jwt_secret",
+        "demo_password",
         "gemini_api_key",
         "gemini_model",
         "deepgram_api_key",
@@ -81,6 +87,13 @@ class Settings(BaseSettings):
     def _strong_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is not None and len(value.get_secret_value()) < 32:
             raise ValueError("JWT_SECRET must be at least 32 characters.")
+        return value
+
+    @field_validator("demo_password")
+    @classmethod
+    def _demo_password_policy(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            validate_new_password(value.get_secret_value())
         return value
 
     @property

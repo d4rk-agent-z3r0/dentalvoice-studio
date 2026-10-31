@@ -11,6 +11,12 @@ class DomainError(Exception):
         self.message = message
 
 
+class ForbiddenError(DomainError):
+    """Authenticated but not allowed: the role forbids it, or the clinic is not the caller's."""
+
+    code = "FORBIDDEN"
+
+
 class NotFoundError(DomainError):
     """Also raised for another clinic's resources, so existence never leaks across tenants."""
 

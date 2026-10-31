@@ -49,8 +49,10 @@ async def client(
 
 
 @pytest.fixture
-def staff(database_settings: Settings, clinic: BookingClinic) -> dict[str, str]:
-    return headers_for(database_settings, clinic.clinic_id, ClinicRole.STAFF)
+async def staff(
+    session_factory: SessionFactory, database_settings: Settings, clinic: BookingClinic
+) -> dict[str, str]:
+    return await headers_for(session_factory, database_settings, clinic.clinic_id, ClinicRole.STAFF)
 
 
 def new_key() -> str:
@@ -184,7 +186,9 @@ async def test_idempotency_keys_are_scoped_to_the_clinic(
     database_settings: Settings,
 ) -> None:
     other = await build_booking_clinic(session_factory)
-    other_staff = headers_for(database_settings, other.clinic_id, ClinicRole.STAFF)
+    other_staff = await headers_for(
+        session_factory, database_settings, other.clinic_id, ClinicRole.STAFF
+    )
     key = new_key()
 
     mine = await book(client, staff, payload(clinic, clinic.at(DAY, 9)), key)
@@ -404,7 +408,9 @@ async def test_another_clinics_resources_are_not_found(
         assert error_of(response) == (404, "NOT_FOUND"), field
         assert response.json()["error"]["message"] == f"{resource} not found."
 
-    other_staff = headers_for(database_settings, other.clinic_id, ClinicRole.ADMIN)
+    other_staff = await headers_for(
+        session_factory, database_settings, other.clinic_id, ClinicRole.ADMIN
+    )
     theirs = (await book(client, other_staff, payload(other, other.at(DAY, 9)))).json()
     for path, body in [("cancel", None), ("reschedule", {"starts_at": start.isoformat()})]:
         response = await client.post(
@@ -434,7 +440,9 @@ async def test_a_conversation_of_the_same_clinic_is_linked(
         )
         await session.flush()
         await publish_slots(session, graph.clinic_id, "Europe/London", DAY, 1)
-    headers = headers_for(database_settings, graph.clinic_id, ClinicRole.ADMIN)
+    headers = await headers_for(
+        session_factory, database_settings, graph.clinic_id, ClinicRole.ADMIN
+    )
     body = {
         "patient_id": str(graph.patient_id),
         "appointment_type_id": str(graph.appointment_type_id),
@@ -456,7 +464,9 @@ async def test_viewers_can_read_but_not_write(
     database_settings: Settings,
     session_factory: SessionFactory,
 ) -> None:
-    viewer = headers_for(database_settings, clinic.clinic_id, ClinicRole.VIEWER)
+    viewer = await headers_for(
+        session_factory, database_settings, clinic.clinic_id, ClinicRole.VIEWER
+    )
     created = (await book(client, staff, payload(clinic, clinic.at(DAY, 9)))).json()
 
     attempts = [
@@ -507,7 +517,9 @@ async def test_list_filters_by_local_day_and_status(
     client: httpx.AsyncClient, session_factory: SessionFactory, database_settings: Settings
 ) -> None:
     clinic = await build_booking_clinic(session_factory, first_day=DAY, days=3)
-    staff = headers_for(database_settings, clinic.clinic_id, ClinicRole.STAFF)
+    staff = await headers_for(
+        session_factory, database_settings, clinic.clinic_id, ClinicRole.STAFF
+    )
     ids = []
     for offset in range(3):
         day = DAY + timedelta(days=offset)

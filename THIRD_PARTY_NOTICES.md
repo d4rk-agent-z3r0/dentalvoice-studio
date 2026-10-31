@@ -22,7 +22,7 @@ package as installed. Inclusion in this list is not an endorsement.
 
 | Category | Packages |
 |---|---|
-| allowed | 554 |
+| allowed | 556 |
 | conditional-reviewed | 42 |
 | conditional-unreviewed | 0 |
 | disallowed | 0 |
@@ -45,6 +45,8 @@ package as installed. Inclusion in this list is not an endorsement.
 | annotated-doc | 0.0.5 | MIT |  | runtime |  | allowed | https://github.com/fastapi/annotated-doc |
 | annotated-types | 0.8.0 | MIT |  | runtime |  | allowed | https://github.com/annotated-types/annotated-types |
 | anyio | 4.15.1 | MIT |  | runtime |  | allowed | https://anyio.readthedocs.io/en/stable/versionhistory.html |
+| argon2-cffi | 25.1.0 | MIT |  | runtime | yes | allowed | https://github.com/hynek/argon2-cffi/blob/main/CHANGELOG.md |
+| argon2-cffi-bindings | 26.1.0 | MIT |  | runtime |  | allowed | https://github.com/hynek/argon2-cffi-bindings/blob/main/CHANGELOG.md |
 | ast_serialize | 0.13.1 | MIT |  | dev |  | allowed | https://github.com/mypyc/ast_serialize |
 | asyncpg | 0.32.0 | Apache-2.0 |  | runtime | yes | allowed | https://pypi.org/project/asyncpg/ |
 | certifi | 2026.10.23 | MPL-2.0 | Mozilla Public License 2.0 (MPL 2.0) | runtime |  | conditional-reviewed | https://github.com/certifi/python-certifi |

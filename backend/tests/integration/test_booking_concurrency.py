@@ -145,7 +145,7 @@ async def test_twenty_concurrent_api_requests_for_one_slot_book_exactly_once(
     clinic: BookingClinic,
 ) -> None:
     settings = database_settings.model_copy(update={"db_pool_size": N})
-    headers = headers_for(settings, clinic.clinic_id, ClinicRole.STAFF)
+    headers = await headers_for(session_factory, settings, clinic.clinic_id, ClinicRole.STAFF)
     body = request_for(clinic, clinic.at(DAY, 10)).model_dump(mode="json")
 
     async with client_factory(settings) as client:

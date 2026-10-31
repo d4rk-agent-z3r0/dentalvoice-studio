@@ -11,12 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.core.security import AuthError, Principal, decode_access_token
 from app.domain.enums import ClinicRole
-from app.domain.errors import DomainError
+from app.domain.errors import ForbiddenError
 from app.orchestrators.conversation import ConversationOrchestrator
+from app.repositories.users import UserRepository
 
-
-class ForbiddenError(DomainError):
-    code = "FORBIDDEN"
+__all__ = ["ForbiddenError"]  # re-exported: routers import it from here
 
 
 def get_settings(request: Request) -> Settings:
@@ -34,14 +33,25 @@ def get_orchestrator(request: Request) -> ConversationOrchestrator:
     return orchestrator
 
 
-def get_principal(
+async def get_principal(
     request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> Principal:
+    """The verified token's principal, re-checked against the database on every request.
+
+    A signature alone is not enough: a user who was deactivated, removed from the clinic or given
+    another role since the token was issued is refused at once, not when the token expires.
+    """
     header = request.headers.get("Authorization", "")
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token:
         raise AuthError("AUTH_REQUIRED", "A bearer access token is required.")
-    return decode_access_token(settings, token.strip())
+    principal = decode_access_token(settings, token.strip())
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    async with session_factory() as session:
+        role = await UserRepository(session).active_role(principal.user_id, principal.clinic_id)
+    if role is not principal.role:
+        raise AuthError("AUTH_INVALID", "This session is no longer valid. Sign in again.")
+    return principal
 
 
 def require_roles(*roles: ClinicRole) -> Callable[[Principal], Awaitable[Principal]]:

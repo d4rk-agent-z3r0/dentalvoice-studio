@@ -409,6 +409,87 @@
       "version": "4.15.1"
     },
     {
+      "bom-ref": "argon2-cffi-bindings==26.1.0",
+      "description": "Low-level CFFI bindings for Argon2",
+      "externalReferences": [
+        {
+          "comment": "from packaging metadata Project-URL: Changelog",
+          "type": "release-notes",
+          "url": "https://github.com/hynek/argon2-cffi-bindings/blob/main/CHANGELOG.md"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: Funding",
+          "type": "other",
+          "url": "https://github.com/sponsors/hynek"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: GitHub",
+          "type": "vcs",
+          "url": "https://github.com/hynek/argon2-cffi-bindings"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: Tidelift",
+          "type": "other",
+          "url": "https://tidelift.com/?utm_source=lifter&utm_medium=referral&utm_campaign=hynek"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "acknowledgement": "declared",
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "argon2-cffi-bindings",
+      "purl": "pkg:pypi/argon2-cffi-bindings@26.1.0",
+      "type": "library",
+      "version": "26.1.0"
+    },
+    {
+      "bom-ref": "argon2-cffi==25.1.0",
+      "description": "Argon2 for Python",
+      "externalReferences": [
+        {
+          "comment": "from packaging metadata Project-URL: Changelog",
+          "type": "release-notes",
+          "url": "https://github.com/hynek/argon2-cffi/blob/main/CHANGELOG.md"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: Documentation",
+          "type": "documentation",
+          "url": "https://argon2-cffi.readthedocs.io/"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: Funding",
+          "type": "other",
+          "url": "https://github.com/sponsors/hynek"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: GitHub",
+          "type": "vcs",
+          "url": "https://github.com/hynek/argon2-cffi"
+        },
+        {
+          "comment": "from packaging metadata Project-URL: Tidelift",
+          "type": "other",
+          "url": "https://tidelift.com/?utm_source=lifter&utm_medium=referral&utm_campaign=hynek"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "acknowledgement": "declared",
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "argon2-cffi",
+      "purl": "pkg:pypi/argon2-cffi@25.1.0",
+      "type": "library",
+      "version": "25.1.0"
+    },
+    {
       "bom-ref": "ast_serialize==0.13.1",
       "description": "Python bindings for mypy AST serialization",
       "externalReferences": [
@@ -2259,6 +2340,18 @@
       "ref": "anyio==4.15.1"
     },
     {
+      "dependsOn": [
+        "cffi==2.1.1"
+      ],
+      "ref": "argon2-cffi-bindings==26.1.0"
+    },
+    {
+      "dependsOn": [
+        "argon2-cffi-bindings==26.1.0"
+      ],
+      "ref": "argon2-cffi==25.1.0"
+    },
+    {
       "ref": "ast_serialize==0.13.1"
     },
     {
@@ -2495,6 +2588,7 @@
         "PyJWT==2.15.1",
         "SQLAlchemy==2.1.6",
         "alembic==1.20.1",
+        "argon2-cffi==25.1.0",
         "asyncpg==0.32.0",
         "fastapi==0.162.0",
         "google-genai==2.34.0",

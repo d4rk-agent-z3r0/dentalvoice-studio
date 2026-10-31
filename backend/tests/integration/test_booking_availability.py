@@ -78,12 +78,17 @@ def local_starts(body: dict[str, object], dentist_id: uuid.UUID) -> list[str]:
 
 
 async def test_api_lists_runs_long_enough_for_the_type(
-    client: httpx.AsyncClient, clinic: BookingClinic, database_settings: Settings
+    client: httpx.AsyncClient,
+    clinic: BookingClinic,
+    database_settings: Settings,
+    session_factory: SessionFactory,
 ) -> None:
     response = await client.get(
         "/api/v1/availability",
         params={"appointment_type_id": str(clinic.cleaning_id), "date": "2030-01-07"},
-        headers=headers_for(database_settings, clinic.clinic_id, ClinicRole.VIEWER),
+        headers=await headers_for(
+            session_factory, database_settings, clinic.clinic_id, ClinicRole.VIEWER
+        ),
     )
 
     assert response.status_code == 200
@@ -199,7 +204,9 @@ async def test_api_another_clinics_type_is_404_and_bad_queries_are_400(
     database_settings: Settings,
 ) -> None:
     other = await build_booking_clinic(session_factory)
-    headers = headers_for(database_settings, clinic.clinic_id, ClinicRole.STAFF)
+    headers = await headers_for(
+        session_factory, database_settings, clinic.clinic_id, ClinicRole.STAFF
+    )
 
     foreign = await client.get(
         "/api/v1/availability",

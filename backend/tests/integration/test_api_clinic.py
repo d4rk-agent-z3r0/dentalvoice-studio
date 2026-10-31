@@ -47,7 +47,9 @@ async def test_returns_the_tokens_clinic_with_types_and_dentists(
 
     response = await client.get(
         "/api/v1/clinic",
-        headers=headers_for(database_settings, clinic.clinic_id, ClinicRole.VIEWER),
+        headers=await headers_for(
+            session_factory, database_settings, clinic.clinic_id, ClinicRole.VIEWER
+        ),
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -78,7 +80,10 @@ async def test_returns_the_tokens_clinic_with_types_and_dentists(
     assert str(other.dentist_a) not in response.text
 
     theirs = await client.get(
-        "/api/v1/clinic", headers=headers_for(database_settings, other.clinic_id, ClinicRole.ADMIN)
+        "/api/v1/clinic",
+        headers=await headers_for(
+            session_factory, database_settings, other.clinic_id, ClinicRole.ADMIN
+        ),
     )
     assert theirs.json()["id"] == str(other.clinic_id)
     assert theirs.json()["timezone"] == "America/New_York"

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.passwords import hash_password
 from app.database.session import create_engine, create_session_factory
 from app.demo import catalog
 from app.domain.enums import PatientStatus
@@ -185,13 +186,17 @@ async def _scenarios(
         row.expected = expectation(scenario_spec).model_dump(mode="json")
 
 
-async def _users(session: AsyncSession, clinics: dict[str, uuid.UUID]) -> None:
+async def _users(
+    session: AsyncSession, clinics: dict[str, uuid.UUID], password_hash: str | None
+) -> None:
     for spec in catalog.DEMO_USERS:
         user = await session.scalar(select(User).where(User.email == spec.email))
         if user is None:
             user = User(email=spec.email, display_name=spec.display_name)
             session.add(user)
             await session.flush()
+        if password_hash is not None:
+            user.password_hash = password_hash
         for slug, role in spec.roles.items():
             membership = await session.scalar(
                 select(ClinicUser).where(
@@ -209,8 +214,12 @@ async def seed(
     *,
     days: int = 28,
     today: date | None = None,
+    demo_password: str | None = None,
 ) -> SeedReport:
+    """``demo_password`` (from ``DEMO_PASSWORD``) is set on every demo user; ``None`` leaves their
+    passwords as they are. It is hashed once and never stored or logged in plain text."""
     catalog.clip_index()  # fail fast on duplicate clip IDs
+    password_hash = hash_password(demo_password) if demo_password is not None else None
     patients_created = slots_created = 0
     async with session_factory.begin() as session:
         clinic_ids: dict[str, uuid.UUID] = {}
@@ -227,7 +236,7 @@ async def seed(
             slots_created += await publish_slots(
                 session, clinic.id, spec.timezone, local_today, days
             )
-        await _users(session, clinic_ids)
+        await _users(session, clinic_ids, password_hash)
     return SeedReport(
         clinics=len(catalog.CLINICS),
         scenarios=sum(len(c.scenarios) for c in catalog.CLINICS),
@@ -242,10 +251,17 @@ async def _main(days: int) -> None:
     configure_logging(settings.log_level)
     engine = create_engine(settings)
     try:
-        report = await seed(create_session_factory(engine), days=days)
+        password = settings.demo_password
+        report = await seed(
+            create_session_factory(engine),
+            days=days,
+            demo_password=password.get_secret_value() if password is not None else None,
+        )
     finally:
         await engine.dispose()
-    log.info("seed_complete", **report.__dict__)
+    log.info(
+        "seed_complete", demo_passwords_set=settings.demo_password is not None, **report.__dict__
+    )
 
 
 def main() -> None:

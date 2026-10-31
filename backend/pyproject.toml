@@ -22,6 +22,7 @@ dependencies = [
     # Deepgram speech (Milestone 5): live STT over WebSocket, TTS over streaming HTTP.
     "websockets>=15.0",
     "httpx>=0.28,<1",
+    "argon2-cffi>=25.1,<26",
 ]
 
 [dependency-groups]
