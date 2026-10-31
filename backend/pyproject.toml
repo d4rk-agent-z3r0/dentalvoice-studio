@@ -19,6 +19,8 @@ dependencies = [
     "structlog>=26.1",
     "pyjwt>=2.10,<3",
     "google-genai>=2.30,<3",
+    # Deepgram live speech-to-text over WebSocket (Milestone 5).
+    "websockets>=15.0",
 ]
 
 [dependency-groups]

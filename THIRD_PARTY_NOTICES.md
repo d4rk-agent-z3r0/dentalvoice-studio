@@ -100,7 +100,7 @@ package as installed. Inclusion in this list is not an endorsement.
 | uvicorn | 0.54.0 | BSD-3-Clause |  | runtime | yes | allowed | https://uvicorn.dev/ |
 | uvloop | 0.23.0 | MIT OR Apache-2.0 | Apache Software License; MIT License | runtime |  | allowed | https://pypi.org/project/uvloop/ |
 | watchfiles | 1.3.0 | MIT | MIT License | runtime |  | allowed | https://github.com/samuelcolvin/watchfiles |
-| websockets | 17.3 | BSD-3-Clause |  | runtime |  | allowed | https://github.com/python-websockets/websockets |
+| websockets | 17.3 | BSD-3-Clause |  | runtime | yes | allowed | https://github.com/python-websockets/websockets |
 
 ## npm packages
 

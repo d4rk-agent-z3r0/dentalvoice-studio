@@ -1,0 +1,59 @@
+{
+  "type": "Results",
+  "channel_index": [
+    0,
+    1
+  ],
+  "duration": 1.4,
+  "start": 1.6,
+  "is_final": true,
+  "speech_final": false,
+  "from_finalize": false,
+  "channel": {
+    "alternatives": [
+      {
+        "transcript": "next Tuesday morning, please.",
+        "confidence": 0.95,
+        "words": [
+          {
+            "word": "next",
+            "start": 1.7,
+            "end": 1.9,
+            "confidence": 0.96,
+            "punctuated_word": "next"
+          },
+          {
+            "word": "tuesday",
+            "start": 1.9,
+            "end": 2.3,
+            "confidence": 0.95,
+            "punctuated_word": "Tuesday"
+          },
+          {
+            "word": "morning",
+            "start": 2.3,
+            "end": 2.7,
+            "confidence": 0.94,
+            "punctuated_word": "morning,"
+          },
+          {
+            "word": "please",
+            "start": 2.7,
+            "end": 2.95,
+            "confidence": 0.95,
+            "punctuated_word": "please."
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "model_info": {
+      "name": "stt-test-model",
+      "version": "test",
+      "arch": "test"
+    },
+    "model_uuid": "00000000-0000-4000-8000-0000000000aa"
+  }
+}

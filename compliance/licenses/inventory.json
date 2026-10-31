@@ -711,7 +711,7 @@
     "category": "allowed",
     "concluded": "BSD-3-Clause",
     "declared": "BSD-3-Clause",
-    "direct": false,
+    "direct": true,
     "ecosystem": "python",
     "name": "websockets",
     "note": "",
