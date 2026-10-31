@@ -35,6 +35,7 @@ services:
   # One-shot: applies Alembic migrations, then exits. The backend starts only if it succeeded.
   migrate:
     <<: *hardened
+    image: dentalvoice-backend
     build: ./backend
     command: ["alembic", "upgrade", "head"]
     environment:
@@ -48,6 +49,7 @@ services:
 
   backend:
     <<: *hardened
+    image: dentalvoice-backend
     build: ./backend
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
