@@ -32,8 +32,24 @@ services:
       retries: 10
       start_period: 10s
 
+  # One-shot: applies Alembic migrations, then exits. The backend starts only if it succeeded.
+  migrate:
+    <<: *hardened
+    image: dentalvoice-backend
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dentalvoice}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-dentalvoice}
+    tmpfs:
+      - /tmp
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     <<: *hardened
+    image: dentalvoice-backend
     build: ./backend
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -41,11 +57,14 @@ services:
       VOICE_PROVIDER_MODE: ${VOICE_PROVIDER_MODE:-mock}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dentalvoice}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-dentalvoice}
       CORS_ORIGINS: '["http://localhost:3000"]'
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (32+ random characters)}
     tmpfs:
       - /tmp
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8000:8000"
 

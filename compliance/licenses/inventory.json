@@ -377,6 +377,18 @@
     "declared": "MIT",
     "direct": true,
     "ecosystem": "python",
+    "name": "PyJWT",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/jpadilla/pyjwt",
+    "version": "2.15.1"
+  },
+  {
+    "category": "allowed",
+    "concluded": "MIT",
+    "declared": "MIT",
+    "direct": true,
+    "ecosystem": "python",
     "name": "pytest",
     "note": "",
     "scope": "dev",
