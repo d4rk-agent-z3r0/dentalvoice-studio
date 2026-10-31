@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.core.rate_limit import RateLimitedError
 from app.core.security import AuthError
 from app.domain.errors import DomainError
 from app.integrations.llm.base import ProviderError, ProviderUnavailableError
@@ -37,6 +38,12 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _domain(_: Request, error: DomainError) -> JSONResponse:
         status = _DOMAIN_STATUS.get(error.code, 400)
         return JSONResponse(error_body(error.code, error.message), status_code=status)
+
+    @app.exception_handler(RateLimitedError)
+    async def _rate_limited(_: Request, error: RateLimitedError) -> JSONResponse:
+        seconds = error.retry_after_seconds
+        body = error_body(error.code, error.message, retry_after_seconds=seconds)
+        return JSONResponse(body, status_code=429, headers={"Retry-After": str(seconds)})
 
     @app.exception_handler(AuthError)
     async def _auth(_: Request, error: AuthError) -> JSONResponse:

@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # Password for the seeded demo users (`make seed`). Local .env only, never committed. Unset
     # means the demo users get no password and cannot sign in with one.
     demo_password: SecretStr | None = None
+    # Rate limits (token buckets, per process; docs/api-reference.md "Rate limits").
+    rate_limits_enabled: bool = True
+    rate_login_per_ip_per_minute: int = Field(default=20, ge=1, le=10_000)
+    rate_login_failures_per_account: int = Field(default=5, ge=1, le=1_000)  # per 15 minutes
+    rate_requests_per_user_per_minute: int = Field(default=600, ge=1, le=100_000)
+    rate_writes_per_user_per_minute: int = Field(default=120, ge=1, le=100_000)
     booking_horizon_days: int = Field(default=60, ge=1, le=365)
     # Live conversation model (VOICE_PROVIDER_MODE=live). Model ids change over time, so there is
     # no default: the operator names the model explicitly (see docs/providers.md).

@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.rate_limits import get_request_limits
 from app.core.config import Settings
 from app.core.security import AuthError, Principal, decode_access_token
 from app.domain.enums import ClinicRole
@@ -46,6 +47,8 @@ async def get_principal(
     if scheme.lower() != "bearer" or not token:
         raise AuthError("AUTH_REQUIRED", "A bearer access token is required.")
     principal = decode_access_token(settings, token.strip())
+    # Limited before the database is touched; only a validly signed token gets this far.
+    get_request_limits(request).request(principal.user_id)
     session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     async with session_factory() as session:
         role = await UserRepository(session).active_role(principal.user_id, principal.clinic_id)
@@ -54,12 +57,15 @@ async def get_principal(
     return principal
 
 
-def require_roles(*roles: ClinicRole) -> Callable[[Principal], Awaitable[Principal]]:
+def require_roles(*roles: ClinicRole) -> Callable[[Request, Principal], Awaitable[Principal]]:
     allowed = frozenset(roles)
 
-    async def _check(principal: Annotated[Principal, Depends(get_principal)]) -> Principal:
+    async def _check(
+        request: Request, principal: Annotated[Principal, Depends(get_principal)]
+    ) -> Principal:
         if principal.role not in allowed:
             raise ForbiddenError("Your role does not allow this action.")
+        get_request_limits(request).write(principal.user_id)  # role-gated routes are the writes
         return principal
 
     return _check

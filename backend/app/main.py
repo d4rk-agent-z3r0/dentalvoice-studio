@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import health
 from app.api import v1 as api_v1
 from app.api.errors import install_error_handlers
+from app.api.rate_limits import RequestLimits
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.database.session import create_engine, create_session_factory
@@ -70,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.request_limits = RequestLimits(settings)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

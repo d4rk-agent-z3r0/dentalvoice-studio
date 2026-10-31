@@ -75,6 +75,23 @@ password, for development only. It refuses to run in production.
 Roles: `admin` and `staff` may create and drive conversations; `viewer` is read-only (`403
 FORBIDDEN`).
 
+### Rate limits — M8
+
+Token buckets in the API process; a refused request is `429 RATE_LIMITED` with a `Retry-After`
+header (seconds) and the same value in `error.retry_after_seconds`. A refused request consumes
+nothing, so retrying early does not extend the wait.
+
+| What | Key | Default | Setting |
+|---|---|---|---|
+| Sign-in attempts | client IP (TCP peer; `X-Forwarded-For` is not trusted) | 20 per minute | `RATE_LOGIN_PER_IP_PER_MINUTE` |
+| Failed sign-ins | account (email, held only as a hash) | 5 per 15 minutes, then locked even for the right password until a token refills; a successful sign-in clears the count | `RATE_LOGIN_FAILURES_PER_ACCOUNT` |
+| Authenticated requests | user | 600 per minute | `RATE_REQUESTS_PER_USER_PER_MINUTE` |
+| Writes (every admin/staff route, including WebSocket tickets) | user | 120 per minute | `RATE_WRITES_PER_USER_PER_MINUTE` |
+
+Only a validly signed token reaches the per-user buckets. `RATE_LIMITS_ENABLED=false` turns them
+all off (for load tests only). The state is per process: running several API replicas would need a
+shared store (docs/security/threat-model.md).
+
 ## Scenarios & conversations — shipped in M3
 
 | Method | Path | Role | Notes |
