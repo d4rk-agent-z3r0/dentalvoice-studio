@@ -12,7 +12,7 @@ import re
 
 from app.domain.enums import ConversationState, IntakeField
 from app.domain.spoken import find_email, find_phone, find_time, find_weekday_date
-from app.integrations.llm.base import TurnContext
+from app.integrations.llm.base import ProposalResult, TurnContext
 from app.schemas.proposal import FieldUpdates, Intent, NextAction, TurnProposal
 
 S = ConversationState
@@ -66,7 +66,10 @@ class MockConversationProvider:
     name = "mock"
     writes_responses = False
 
-    async def propose(self, context: TurnContext) -> TurnProposal:
+    async def propose(self, context: TurnContext) -> ProposalResult:
+        return ProposalResult(self._propose(context))
+
+    def _propose(self, context: TurnContext) -> TurnProposal:
         text = context.utterance.lower()
         updates: dict[str, str] = {}
         corrected: list[IntakeField] = []

@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "{\"assistant_response\": \"Welcome! Could I have your first and last name, please?\", \"intent\": \"provide_information\", \"field_updates\": {\"clinic_id\": \"x\"}, \"corrected_fields\": [], \"declined_fields\": [], \"missing_fields\": [\"first_name\", \"last_name\"], \"next_action\": \"BOOK_APPOINTMENT\", \"confidence\": 0.92, \"requires_escalation\": false, \"escalation_reason\": null}"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 812,
+    "candidatesTokenCount": 41,
+    "totalTokenCount": 853
+  },
+  "modelVersion": "gemini-test-model",
+  "responseId": "resp-000000000000"
+}

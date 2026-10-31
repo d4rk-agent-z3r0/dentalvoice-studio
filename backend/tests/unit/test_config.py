@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.config import REPO_ROOT_ENV_FILE, ProviderMode, Settings
+from tests.conftest import UNREACHABLE_DATABASE_URL, make_test_settings
 
 
 def test_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -57,3 +58,14 @@ def test_environment_variables_override_env_file(
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@from-env:5432/db")
     settings = Settings(_env_file=env_file)
     assert settings.database_url.hosts()[0]["host"] == "from-env"
+
+
+def test_blank_optional_values_mean_unset() -> None:
+    settings = make_test_settings(
+        UNREACHABLE_DATABASE_URL, jwt_secret="", gemini_api_key="  ", gemini_model=""
+    )
+    assert (settings.jwt_secret, settings.gemini_api_key, settings.gemini_model) == (
+        None,
+        None,
+        None,
+    )

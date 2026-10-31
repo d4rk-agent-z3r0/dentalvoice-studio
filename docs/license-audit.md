@@ -1,6 +1,7 @@
 # Licence Audit
 
-> Audit date: 2026-10-30, at the end of the licensing milestone (before Milestone 2).
+> Audit date: 2026-10-30, at the end of the licensing milestone. Updated 2026-10-31 for the
+> Milestone 3 (PyJWT) and Milestone 4 (google-genai and its dependencies) additions.
 > Statuses: **Verified** · **Requires manual review** · **Not applicable** · **Blocked**.
 > This audit does **not** declare the repository fully licence-compliant. The open items in §3
 > are unresolved.
@@ -14,7 +15,7 @@
 | Platform-specific npm packages not installed on Linux x64 | cdxgen 12.9.0 with npm-registry licence lookup | same inventory, scope `optional-other-platform` |
 | SBOMs | cyclonedx-bom 7.6.0 (backend), cdxgen 12.9.0 (frontend), CycloneDX 1.6 JSON | `compliance/sbom/*.cdx.json` |
 | Classification | `scripts/compliance.py` against `compliance/license-policy.json` | `THIRD_PARTY_NOTICES.md` |
-| Ambiguous metadata | Bundled licence files read by hand (httpx, uvloop, colorama) | `overrides` in the policy, with evidence |
+| Ambiguous metadata | Bundled licence files read by hand (httpx, uvloop, colorama, pyasn1_modules, sniffio) | `overrides` in the policy, with evidence |
 | Container images | Reviewed by hand | `container_images` in the policy |
 
 Reproducibility: four consecutive `python3 scripts/compliance.py generate` runs, plus a run in a
@@ -28,12 +29,12 @@ need. Both SBOMs validate against the CycloneDX 1.6 JSON schema
 
 | Ecosystem | Runtime | Dev / build | Other-platform optional | Total |
 |---|---|---|---|---|
-| Python | 28 | 18 | — | 46 |
+| Python | 45 | 15 | — | 60 |
 | npm | 67 | 373 | 96 | 536 |
 
 | Category | Count | Meaning |
 |---|---|---|
-| allowed | 540 | Permissive licence on the policy allow-list |
+| allowed | 554 | Permissive licence on the policy allow-list |
 | conditional-reviewed | 42 | MPL-2.0, LGPL-3.0-or-later or CC-BY-4.0, each with a recorded review decision |
 | conditional-unreviewed | 0 | — |
 | disallowed | 0 | — |
@@ -43,7 +44,8 @@ Reviewed conditional licences:
 
 | Licence | Packages | Scope | Decision |
 |---|---|---|---|
-| MPL-2.0 | certifi, pathspec | Python dev | Accepted: unmodified, not in the runtime image |
+| MPL-2.0 | certifi | Python **runtime** (since M4: CA bundle used by the Gemini client's HTTP stack) | Accepted: shipped unmodified; MPL-2.0 is file-level copyleft, so obligations are to keep the files unmodified with their notice and point to the public source |
+| MPL-2.0 | pathspec | Python dev | Accepted: unmodified, not in the runtime image |
 | MPL-2.0 | axe-core, lightningcss (+ platform builds) | npm build/test | Accepted: unmodified, not in the runtime image |
 | LGPL-3.0-or-later | @img/sharp-libvips-\* (+ sharp wasm/win32 builds) | npm runtime, optional (via `next → sharp`) | Accepted with obligations. **Ships in the frontend Docker image** (verified: `libvips-cpp.so` under `/app/node_modules`). Not used by the app (no `next/image`). |
 | CC-BY-4.0 | caniuse-lite | npm (build data) | Accepted with attribution in `THIRD_PARTY_NOTICES.md` |
@@ -57,7 +59,7 @@ Reviewed conditional licences:
 | NOTICE present where needed | Not applicable | MIT requires no NOTICE file. No Apache-2.0 code is vendored; Apache NOTICE obligations travel with each package |
 | README identifies the project licence | Verified | README "Licence" section |
 | SPDX information in source files | Verified | `scripts/add_spdx_headers.py --check` in `make lint` and CI |
-| Dependencies audited | Verified, with limitation | All 582 packages classified, 0 unknown. For non-ambiguous packages the declared SPDX metadata is used. Bundled licence files were read by hand only for the 3 ambiguous packages. |
+| Dependencies audited | Verified, with limitation | All 596 packages classified, 0 unknown. For non-ambiguous packages the declared SPDX metadata is used. Bundled licence files were read by hand only for the 5 ambiguous packages (httpx, uvloop, colorama, pyasn1_modules, sniffio). |
 | Third-party asset permissions checked | Verified | No images, icons, logos, fonts or sample data in the repository |
 | Fonts and icons suitably licensed | Not applicable | None bundled; system font stacks only |
 | Synthetic audio redistribution permissions | **Blocked** until Milestone 5 | No audio exists yet. TTS provider output terms must be checked and recorded before any clip is committed. |

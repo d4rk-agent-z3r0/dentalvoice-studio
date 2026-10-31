@@ -49,7 +49,7 @@ def test_unsigned_token_is_rejected() -> None:
         "iat": datetime.now(UTC),
         "exp": datetime.now(UTC) + timedelta(hours=1),
     }
-    forged = jwt.encode(claims, key=None, algorithm="none")
+    forged = jwt.encode(claims, key="", algorithm="none")
     with pytest.raises(AuthError):
         decode_access_token(SETTINGS, forged)
 

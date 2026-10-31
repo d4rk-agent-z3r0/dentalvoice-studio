@@ -31,7 +31,7 @@ async def propose(
         services=SERVICES,
         history=[],
     )
-    return await MockConversationProvider().propose(context)
+    return (await MockConversationProvider().propose(context)).proposal
 
 
 async def test_urgent_symptoms_escalate_from_any_state() -> None:

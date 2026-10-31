@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "{\"assistant_response\": \"Sure\", \"intent\": "
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 812,
+    "candidatesTokenCount": 41,
+    "totalTokenCount": 853
+  },
+  "modelVersion": "gemini-test-model",
+  "responseId": "resp-000000000000"
+}

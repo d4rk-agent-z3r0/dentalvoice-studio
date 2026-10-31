@@ -104,6 +104,11 @@ class ConversationTurn(UUIDPrimaryKey, CreatedAt, Base):
             "AND coalesce(tts_ms, 0) >= 0 AND coalesce(total_ms, 0) >= 0",
             name="latency_non_negative",
         ),
+        CheckConstraint(
+            "coalesce(prompt_tokens, 0) >= 0 AND coalesce(output_tokens, 0) >= 0 "
+            "AND coalesce(llm_attempts, 1) >= 1",
+            name="usage_non_negative",
+        ),
     )
 
     clinic_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
@@ -116,6 +121,10 @@ class ConversationTurn(UUIDPrimaryKey, CreatedAt, Base):
     llm_ms: Mapped[int | None] = mapped_column(Integer)
     tts_ms: Mapped[int | None] = mapped_column(Integer)
     total_ms: Mapped[int | None] = mapped_column(Integer)
+    # As reported by the conversation provider for the reply on this turn; never estimated.
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    llm_attempts: Mapped[int | None] = mapped_column(Integer)
 
 
 class ConversationEvent(UUIDPrimaryKey, CreatedAt, Base):

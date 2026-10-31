@@ -44,7 +44,9 @@ from app.domain.errors import (
 from app.integrations.llm.base import (
     ConversationModelProvider,
     HistoryLine,
+    ProposalResult,
     ProviderError,
+    TokenUsage,
     TurnContext,
 )
 from app.models import Conversation, ConversationTurn, Patient
@@ -162,13 +164,13 @@ class ConversationOrchestrator:
 
         started = time.perf_counter()
         try:
-            proposal = await self._provider.propose(recorded.context)
+            result = await self._provider.propose(recorded.context)
         except ProviderError as error:
             await self._record_provider_error(clinic_id, conversation_id, error)
             raise
         llm_ms = round((time.perf_counter() - started) * 1000)
 
-        return await self._decide_and_commit(clinic_id, conversation_id, recorded, proposal, llm_ms)
+        return await self._decide_and_commit(clinic_id, conversation_id, recorded, result, llm_ms)
 
     async def _record(
         self,
@@ -222,9 +224,10 @@ class ConversationOrchestrator:
         clinic_id: uuid.UUID,
         conversation_id: uuid.UUID,
         recorded: _Recorded,
-        proposal: TurnProposal,
+        result: ProposalResult,
         llm_ms: int,
     ) -> TurnResult:
+        proposal = result.proposal
         async with self._sf.begin() as session:
             conversation = await self._locked(session, clinic_id, conversation_id)
             if conversation.state_version != recorded.version:
@@ -264,7 +267,13 @@ class ConversationOrchestrator:
             values = await intake.live_values(clinic_id, conversation_id)
             reply = self._reply(recorded, conversation.state, decision, proposal, changes, values)
             seq, _ = self._add_turn(
-                session, conversation, Speaker.RECEPTIONIST, reply, llm_ms=llm_ms
+                session,
+                conversation,
+                Speaker.RECEPTIONIST,
+                reply,
+                llm_ms=llm_ms,
+                usage=result.usage,
+                attempts=result.attempts,
             )
             await session.flush()
             log.info(
@@ -277,6 +286,9 @@ class ConversationOrchestrator:
                 corrected=len(changes.corrected),
                 rejected=len(changes.rejected),
                 llm_ms=llm_ms,
+                llm_attempts=result.attempts,
+                prompt_tokens=result.usage.prompt_tokens if result.usage else None,
+                output_tokens=result.usage.output_tokens if result.usage else None,
                 provider=self._provider.name,
             )
             return TurnResult(
@@ -436,6 +448,8 @@ class ConversationOrchestrator:
         clip_id: str | None = None,
         stt_ms: int | None = None,
         llm_ms: int | None = None,
+        usage: TokenUsage | None = None,
+        attempts: int | None = None,
     ) -> tuple[int, uuid.UUID]:
         seq = conversation.turn_count + 1
         turn_id = uuid7()
@@ -450,6 +464,9 @@ class ConversationOrchestrator:
                 clip_id=clip_id,
                 stt_ms=stt_ms,
                 llm_ms=llm_ms,
+                prompt_tokens=usage.prompt_tokens if usage else None,
+                output_tokens=usage.output_tokens if usage else None,
+                llm_attempts=attempts,
             )
         )
         conversation.turn_count = seq

@@ -20,11 +20,10 @@ from app.demo import catalog
 from app.demo.seed import seed
 from app.domain.enums import ConversationState, IntakeField
 from app.domain.errors import ConcurrentUpdateError
-from app.integrations.llm.base import ProviderError, TurnContext
+from app.integrations.llm.base import ProposalResult, ProviderError, TurnContext
 from app.integrations.llm.mock import MockConversationProvider
 from app.models import Patient
 from app.orchestrators.conversation import ConversationOrchestrator
-from app.schemas.proposal import TurnProposal
 from app.services.conversations import ConversationService
 from tests.conftest import ClientFactory
 from tests.support.api import DemoClinic, bearer, load_clinic, token_for
@@ -245,7 +244,7 @@ class _GatedProvider:
         self.waiting = 0
         self._inner = MockConversationProvider()
 
-    async def propose(self, context: TurnContext) -> TurnProposal:
+    async def propose(self, context: TurnContext) -> ProposalResult:
         self.waiting += 1
         if self.waiting == 2:
             self.both_waiting.set()
@@ -296,7 +295,7 @@ class _FailingProvider:
     name = "failing"
     writes_responses = False
 
-    async def propose(self, context: TurnContext) -> TurnProposal:
+    async def propose(self, context: TurnContext) -> ProposalResult:
         raise ProviderError("failing", "upstream timed out")
 
 

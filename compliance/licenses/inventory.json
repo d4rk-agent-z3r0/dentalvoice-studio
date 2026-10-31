@@ -78,10 +78,34 @@
     "direct": false,
     "ecosystem": "python",
     "name": "certifi",
-    "note": "accepted: Development-only (pulled in by httpx test client and mypy); unmodified; not in the runtime image.",
-    "scope": "dev",
+    "note": "accepted: Runtime since Milestone 4 (Mozilla CA bundle used by requests/httpx inside the Gemini client) and development. Shipped unmodified; MPL-2.0 is file-level copyleft, so the obligations are to keep the files unmodified with their licence notice (listed in THIRD_PARTY_NOTICES.md) and point to the public source. Reviewed 2026-10-31.",
+    "scope": "runtime",
     "source": "https://github.com/certifi/python-certifi",
     "version": "2026.10.23"
+  },
+  {
+    "category": "allowed",
+    "concluded": "MIT-0",
+    "declared": "MIT-0",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "cffi",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://cffi.readthedocs.io/en/latest/whatsnew.html",
+    "version": "2.1.1"
+  },
+  {
+    "category": "allowed",
+    "concluded": "MIT",
+    "declared": "MIT",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "charset-normalizer",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md",
+    "version": "3.5.2"
   },
   {
     "category": "allowed",
@@ -121,6 +145,30 @@
   },
   {
     "category": "allowed",
+    "concluded": "Apache-2.0 OR BSD-3-Clause",
+    "declared": "Apache-2.0 OR BSD-3-Clause",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "cryptography",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/pyca/cryptography",
+    "version": "50.0.2"
+  },
+  {
+    "category": "allowed",
+    "concluded": "Apache-2.0",
+    "declared": "Apache Software License",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "distro",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/python-distro/distro",
+    "version": "1.9.0"
+  },
+  {
+    "category": "allowed",
     "concluded": "MIT",
     "declared": "MIT",
     "direct": true,
@@ -130,6 +178,30 @@
     "scope": "runtime",
     "source": "https://github.com/fastapi/fastapi",
     "version": "0.162.0"
+  },
+  {
+    "category": "allowed",
+    "concluded": "Apache-2.0",
+    "declared": "Apache Software License",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "google-auth",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/googleapis/google-cloud-python/tree/main/packages/google-auth",
+    "version": "2.62.0"
+  },
+  {
+    "category": "allowed",
+    "concluded": "Apache-2.0",
+    "declared": "Apache-2.0",
+    "direct": true,
+    "ecosystem": "python",
+    "name": "google-genai",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/googleapis/python-genai",
+    "version": "2.34.0"
   },
   {
     "category": "allowed",
@@ -163,7 +235,7 @@
     "ecosystem": "python",
     "name": "httpcore",
     "note": "",
-    "scope": "dev",
+    "scope": "runtime",
     "source": "https://www.encode.io/httpcore/",
     "version": "1.0.9"
   },
@@ -187,7 +259,7 @@
     "ecosystem": "python",
     "name": "httpx",
     "note": "",
-    "scope": "dev",
+    "scope": "runtime",
     "source": "https://github.com/encode/httpx",
     "version": "0.28.1"
   },
@@ -306,7 +378,7 @@
     "direct": false,
     "ecosystem": "python",
     "name": "pathspec",
-    "note": "accepted: Development-only (pulled in by httpx test client and mypy); unmodified; not in the runtime image.",
+    "note": "accepted: Development-only (pulled in by mypy); unmodified; not in the runtime image.",
     "scope": "dev",
     "source": "https://python-path-specification.readthedocs.io/en/latest/index.html",
     "version": "1.1.1"
@@ -322,6 +394,42 @@
     "scope": "dev",
     "source": "https://github.com/pytest-dev/pluggy",
     "version": "1.7.0"
+  },
+  {
+    "category": "allowed",
+    "concluded": "BSD-2-Clause",
+    "declared": "BSD-2-Clause",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "pyasn1",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/pyasn1/pyasn1",
+    "version": "0.6.5"
+  },
+  {
+    "category": "allowed",
+    "concluded": "BSD-2-Clause",
+    "declared": "BSD License",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "pyasn1_modules",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/pyasn1/pyasn1-modules",
+    "version": "0.4.2"
+  },
+  {
+    "category": "allowed",
+    "concluded": "BSD-3-Clause",
+    "declared": "BSD-3-Clause",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "pycparser",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/eliben/pycparser",
+    "version": "3.12"
   },
   {
     "category": "allowed",
@@ -445,6 +553,18 @@
   },
   {
     "category": "allowed",
+    "concluded": "Apache-2.0",
+    "declared": "Apache Software License",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "requests",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/psf/requests",
+    "version": "2.34.2"
+  },
+  {
+    "category": "allowed",
     "concluded": "MIT",
     "declared": "MIT",
     "direct": true,
@@ -454,6 +574,18 @@
     "scope": "dev",
     "source": "https://docs.astral.sh/ruff",
     "version": "0.17.3"
+  },
+  {
+    "category": "allowed",
+    "concluded": "MIT OR Apache-2.0",
+    "declared": "Apache Software License; MIT License",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "sniffio",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/python-trio/sniffio",
+    "version": "1.3.1"
   },
   {
     "category": "allowed",
@@ -493,6 +625,18 @@
   },
   {
     "category": "allowed",
+    "concluded": "Apache-2.0",
+    "declared": "Apache Software License",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "tenacity",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/jd/tenacity",
+    "version": "9.1.4"
+  },
+  {
+    "category": "allowed",
     "concluded": "PSF-2.0",
     "declared": "PSF-2.0",
     "direct": false,
@@ -514,6 +658,18 @@
     "scope": "runtime",
     "source": "https://github.com/pydantic/typing-inspection",
     "version": "0.4.4"
+  },
+  {
+    "category": "allowed",
+    "concluded": "MIT",
+    "declared": "MIT",
+    "direct": false,
+    "ecosystem": "python",
+    "name": "urllib3",
+    "note": "",
+    "scope": "runtime",
+    "source": "https://github.com/urllib3/urllib3/blob/main/CHANGES.rst",
+    "version": "2.8.0"
   },
   {
     "category": "allowed",

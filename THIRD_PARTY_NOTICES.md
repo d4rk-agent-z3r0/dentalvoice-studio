@@ -22,7 +22,7 @@ package as installed. Inclusion in this list is not an endorsement.
 
 | Category | Packages |
 |---|---|
-| allowed | 541 |
+| allowed | 554 |
 | conditional-reviewed | 42 |
 | conditional-unreviewed | 0 |
 | disallowed | 0 |
@@ -47,16 +47,22 @@ package as installed. Inclusion in this list is not an endorsement.
 | anyio | 4.15.1 | MIT |  | runtime |  | allowed | https://anyio.readthedocs.io/en/stable/versionhistory.html |
 | ast_serialize | 0.13.1 | MIT |  | dev |  | allowed | https://github.com/mypyc/ast_serialize |
 | asyncpg | 0.32.0 | Apache-2.0 |  | runtime | yes | allowed | https://pypi.org/project/asyncpg/ |
-| certifi | 2026.10.23 | MPL-2.0 | Mozilla Public License 2.0 (MPL 2.0) | dev |  | conditional-reviewed | https://github.com/certifi/python-certifi |
+| certifi | 2026.10.23 | MPL-2.0 | Mozilla Public License 2.0 (MPL 2.0) | runtime |  | conditional-reviewed | https://github.com/certifi/python-certifi |
+| cffi | 2.1.1 | MIT-0 |  | runtime |  | allowed | https://cffi.readthedocs.io/en/latest/whatsnew.html |
+| charset-normalizer | 3.5.2 | MIT |  | runtime |  | allowed | https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md |
 | click | 8.5.0 | BSD-3-Clause |  | runtime |  | allowed | https://github.com/pallets/click/ |
 | colorama | 0.4.6 | BSD-3-Clause | not installed on this platform | dev |  | allowed | https://pypi.org/project/colorama/ |
 | coverage | 7.17.0 | Apache-2.0 |  | dev |  | allowed | https://github.com/coveragepy/coveragepy |
+| cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause |  | runtime |  | allowed | https://github.com/pyca/cryptography |
+| distro | 1.9.0 | Apache-2.0 | Apache Software License | runtime |  | allowed | https://github.com/python-distro/distro |
 | fastapi | 0.162.0 | MIT |  | runtime | yes | allowed | https://github.com/fastapi/fastapi |
+| google-auth | 2.62.0 | Apache-2.0 | Apache Software License | runtime |  | allowed | https://github.com/googleapis/google-cloud-python/tree/main/packages/google-auth |
+| google-genai | 2.34.0 | Apache-2.0 |  | runtime | yes | allowed | https://github.com/googleapis/python-genai |
 | greenlet | 3.5.6 | MIT AND PSF-2.0 |  | runtime |  | allowed | https://greenlet.readthedocs.io |
 | h11 | 0.16.0 | MIT | MIT License | runtime |  | allowed | https://github.com/python-hyper/h11 |
-| httpcore | 1.0.9 | BSD-3-Clause |  | dev |  | allowed | https://www.encode.io/httpcore/ |
+| httpcore | 1.0.9 | BSD-3-Clause |  | runtime |  | allowed | https://www.encode.io/httpcore/ |
 | httptools | 0.9.0 | MIT |  | runtime |  | allowed | https://github.com/MagicStack/httptools |
-| httpx | 0.28.1 | BSD-3-Clause | BSD License | dev | yes | allowed | https://github.com/encode/httpx |
+| httpx | 0.28.1 | BSD-3-Clause | BSD License | runtime | yes | allowed | https://github.com/encode/httpx |
 | idna | 3.20 | BSD-3-Clause |  | runtime |  | allowed | https://github.com/kjd/idna |
 | iniconfig | 2.3.1 | MIT |  | dev |  | allowed | https://github.com/pytest-dev/iniconfig |
 | librt | 0.16.0 | MIT |  | dev |  | allowed | https://github.com/mypyc/librt |
@@ -68,6 +74,9 @@ package as installed. Inclusion in this list is not an endorsement.
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |  | dev |  | allowed | https://github.com/pypa/packaging |
 | pathspec | 1.1.1 | MPL-2.0 | Mozilla Public License 2.0 (MPL 2.0) | dev |  | conditional-reviewed | https://python-path-specification.readthedocs.io/en/latest/index.html |
 | pluggy | 1.7.0 | MIT | MIT License | dev |  | allowed | https://github.com/pytest-dev/pluggy |
+| pyasn1 | 0.6.5 | BSD-2-Clause |  | runtime |  | allowed | https://github.com/pyasn1/pyasn1 |
+| pyasn1_modules | 0.4.2 | BSD-2-Clause | BSD License | runtime |  | allowed | https://github.com/pyasn1/pyasn1-modules |
+| pycparser | 3.12 | BSD-3-Clause |  | runtime |  | allowed | https://github.com/eliben/pycparser |
 | pydantic | 2.14.2 | MIT |  | runtime | yes | allowed | https://github.com/pydantic/pydantic |
 | pydantic_core | 2.50.2 | MIT |  | runtime |  | allowed | https://github.com/pydantic |
 | pydantic-settings | 2.16.2 | MIT |  | runtime | yes | allowed | https://github.com/pydantic/pydantic-settings |
@@ -78,12 +87,16 @@ package as installed. Inclusion in this list is not an endorsement.
 | pytest-cov | 7.1.0 | MIT |  | dev | yes | allowed | https://pytest-cov.readthedocs.io/en/latest/changelog.html |
 | python-dotenv | 1.2.4 | BSD-3-Clause |  | runtime |  | allowed | https://github.com/theskumar/python-dotenv |
 | PyYAML | 6.0.3 | MIT | MIT License | runtime |  | allowed | https://pyyaml.org/ |
+| requests | 2.34.2 | Apache-2.0 | Apache Software License | runtime |  | allowed | https://github.com/psf/requests |
 | ruff | 0.17.3 | MIT |  | dev | yes | allowed | https://docs.astral.sh/ruff |
+| sniffio | 1.3.1 | MIT OR Apache-2.0 | Apache Software License; MIT License | runtime |  | allowed | https://github.com/python-trio/sniffio |
 | SQLAlchemy | 2.1.6 | MIT |  | runtime | yes | allowed | https://www.sqlalchemy.org |
 | starlette | 1.10.0 | BSD-3-Clause |  | runtime |  | allowed | https://github.com/Kludex/starlette |
 | structlog | 26.1.0 | MIT OR Apache-2.0 |  | runtime | yes | allowed | https://github.com/hynek/structlog/blob/main/CHANGELOG.md |
+| tenacity | 9.1.4 | Apache-2.0 | Apache Software License | runtime |  | allowed | https://github.com/jd/tenacity |
 | typing_extensions | 4.16.0 | PSF-2.0 |  | runtime |  | allowed | https://github.com/python/typing_extensions |
 | typing-inspection | 0.4.4 | MIT |  | runtime |  | allowed | https://github.com/pydantic/typing-inspection |
+| urllib3 | 2.8.0 | MIT |  | runtime |  | allowed | https://github.com/urllib3/urllib3/blob/main/CHANGES.rst |
 | uvicorn | 0.54.0 | BSD-3-Clause |  | runtime | yes | allowed | https://uvicorn.dev/ |
 | uvloop | 0.23.0 | MIT OR Apache-2.0 | Apache Software License; MIT License | runtime |  | allowed | https://pypi.org/project/uvloop/ |
 | watchfiles | 1.3.0 | MIT | MIT License | runtime |  | allowed | https://github.com/samuelcolvin/watchfiles |

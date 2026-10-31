@@ -31,6 +31,19 @@ class TurnContext:
     history: list[HistoryLine]
 
 
+@dataclass(frozen=True)
+class TokenUsage:
+    prompt_tokens: int | None
+    output_tokens: int | None
+
+
+@dataclass(frozen=True)
+class ProposalResult:
+    proposal: TurnProposal
+    usage: TokenUsage | None = None  # reported by the provider; never estimated
+    attempts: int = 1
+
+
 class ProviderError(Exception):
     """A provider call failed. Surfaced to the user; never replaced by a mock (ADR-0005)."""
 
@@ -42,10 +55,16 @@ class ProviderError(Exception):
         self.message = message
 
 
+class ProviderUnavailableError(ProviderError):
+    """Transient: timeouts, rate limits and server errors that persisted through retries."""
+
+    code = "PROVIDER_UNAVAILABLE"
+
+
 class ConversationModelProvider(Protocol):
     name: str
     # True when the provider writes natural replies that may be spoken as-is (subject to checks);
     # False when the orchestrator should always speak its own deterministic reply.
     writes_responses: bool
 
-    async def propose(self, context: TurnContext) -> TurnProposal: ...
+    async def propose(self, context: TurnContext) -> ProposalResult: ...

@@ -44,6 +44,9 @@ class TurnRead(ReadModel):
     llm_ms: int | None
     tts_ms: int | None
     total_ms: int | None
+    prompt_tokens: int | None
+    output_tokens: int | None
+    llm_attempts: int | None
     created_at: datetime
 
 

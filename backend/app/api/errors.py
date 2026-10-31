@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.security import AuthError
 from app.domain.errors import DomainError
-from app.integrations.llm.base import ProviderError
+from app.integrations.llm.base import ProviderError, ProviderUnavailableError
 
 _DOMAIN_STATUS = {
     "FORBIDDEN": 403,
@@ -42,8 +42,14 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ProviderError)
     async def _provider(_: Request, error: ProviderError) -> JSONResponse:
-        body = error_body(error.code, "The conversation provider failed.", provider=error.provider)
-        return JSONResponse(body, status_code=502)
+        unavailable = isinstance(error, ProviderUnavailableError)
+        message = (
+            "The conversation provider is temporarily unavailable. Please try again."
+            if unavailable
+            else "The conversation provider failed."
+        )
+        body = error_body(error.code, message, provider=error.provider)
+        return JSONResponse(body, status_code=503 if unavailable else 502)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, error: RequestValidationError) -> JSONResponse:

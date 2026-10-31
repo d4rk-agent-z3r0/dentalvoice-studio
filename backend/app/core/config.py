@@ -44,6 +44,20 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr | None = None
     jwt_ttl_minutes: int = Field(default=60, ge=1, le=24 * 60)
     booking_horizon_days: int = Field(default=60, ge=1, le=365)
+    # Live conversation model (VOICE_PROVIDER_MODE=live). Model ids change over time, so there is
+    # no default: the operator names the model explicitly (see docs/providers.md).
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{2,63}$")
+    llm_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    llm_max_attempts: int = Field(default=3, ge=1, le=5)
+
+    @field_validator("jwt_secret", "gemini_api_key", "gemini_model", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """``KEY=`` in .env (as in .env.example) means "not set", not an empty value."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @field_validator("jwt_secret")
     @classmethod
