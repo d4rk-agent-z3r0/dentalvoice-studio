@@ -122,3 +122,643 @@ Dependabot opened seven update PRs against the branch on first push. Six pass bo
 no longer bundles Corepack. CI caught it as intended; it is not merged. Dependabot's npm job could
 not update `react`, `react-dom` or `@types/node` because of `eslint@9.39.5` peer constraints; no PR
 was opened for those.
+
+## Milestone 2 — Domain and persistence
+
+PostgreSQL 16 (`postgres:16-alpine`), Python 3.13, run 2026-10-31.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(database)` | Alembic upgrade on an empty database, then `alembic check` | no new upgrade operations: the models and the migration match |
+| | Downgrade to base | only `alembic_version` remains; `btree_gist` removed |
+| | `test_migrations.py`: upgrade → no autogenerate diff → downgrade → upgrade again, on a scratch database | passed |
+| | Service CRUD (`test_services.py`): create, get, list with search (wildcards matched literally), partial update, duplicate contact rejected, unknown id is not found | passed |
+| | Contact normalisation and `PatientCreate` rules (`test_domain_values.py`) | passed |
+| | `docker compose config` with the new one-shot `migrate` service | valid |
+| `feat(demo)` | `python -m app.demo.seed --days 14`, run twice | first run: 2 clinics, 6 scenarios, 6 personas, 2 patients, 1,072 slots. Second run: 0 patients and 0 slots created |
+| | `--days 0` | rejected with a usage error |
+| | Catalogue tests: unique clip IDs, reserved and canonical contact values, field and persona consistency, no routable email or phone in any transcript | passed |
+| | A seed test found a real gap: the returning persona in scenario E had no patient record | fixed in the catalogue before committing |
+| | Slots across the Europe/London DST change on 2026-03-29 | 09:00 local maps to 09:00 UTC before and 08:00 UTC after |
+| `test(database)` | Constraint tests bypass Pydantic and services: reserved email and phone CHECKs, has-contact, composite cross-clinic FKs (conversation, appointment ×3, intake draft), active-appointment exclusion (including `requested`), adjacent and cancelled appointments allowed, per-clinic idempotency key, slot exclusion, `ended_at` iff terminal, stale `state_version` refused, one live intake value per field, rejection-reason and confidence CHECKs | passed |
+| | Tenant isolation through services: get, list and update across clinics fail closed with `NotFoundError`, change nothing, and are indistinguishable from an unknown id | passed |
+| | Mutation check: removed the `clinic_id` filter from `PatientRepository.get` | 2 isolation tests failed as expected; filter restored |
+| | Repository contract: every public query method takes `clinic_id` first | passed |
+
+| Suite | Result |
+|---|---|
+| Backend unit | 91 passed |
+| Backend integration | 36 passed |
+| Coverage (`pytest --cov`, unit + integration) | 96 % of 1,065 statements |
+| Compose stack from an empty volume | `migrate` ran revision `293745f95565` and exited 0. `backend`, `db` and `frontend` were healthy, and `/health/ready` returned 200 |
+| Seed inside the container (`docker compose run --rm migrate python -m app.demo.seed --days 7`) | 6 scenarios, 536 slots |
+| Ruff, ruff format, mypy `--strict` (64 files) | clean |
+
+## Milestone 3 — Conversation engine
+
+Run 2026-10-31, mock mode, no AI credentials present. Commits were made in the order intake →
+orchestrator (the baseline lists orchestrator first) because the orchestrator depends on intake.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(conversation)` | All 144 state pairs checked against an independently written list of allowed transitions; terminal states sticky; review and confirmation cannot be skipped; every scenario's expected path is legal | passed |
+| `feat(intake)` | Field validation and normalisation (11 valid, 15 invalid cases); spoken-phrase helpers (emails, numbers, weekdays, times; ambiguity returns nothing) | passed |
+| | Database: valid values normalised; rejected values stored with a reason and never applied; corrections supersede and keep history; repeat values are no-ops; declined contact stored as `not_provided`; low confidence needs confirmation; event payloads contain no values; snapshot refuses an incomplete intake and records provenance | passed |
+| | Migration `7c1e2a9d4b10`: upgrade, `alembic check`, downgrade one, upgrade | clean |
+| `feat(orchestrator)` | All six catalogue scenarios driven through the orchestrator against PostgreSQL | every state path matched; all fields captured |
+| | Found while doing this: a new patient was written after the conversation that references it (composite FK violation) | fixed: the patient row is flushed first |
+| | Found while doing this: rows created in one transaction share `created_at`, and random UUIDv7 bits made the event order unstable | fixed: UUIDv7 is now monotonic within the process (RFC 9562 method 1); ids assigned when events are recorded |
+| | Decision logic: escalation always honoured; `CONFIRM` refused from collection stages and from an incomplete review; two-step confirmation; corrections re-open the earliest stage and walk back to review | passed |
+| | Auth: token round trip; expired, wrongly signed, unsigned (`alg: none`) and claim-less tokens rejected; keys under 32 characters refused | passed |
+| | API: 401 without or with a bad token (`WWW-Authenticate`, request id in body); scenarios scoped to the token's clinic; viewers 403; another clinic's conversation and scenario 404; validation errors 400 without echoing input; typed turns 403 in production | passed |
+| | PyJWT 2.15.1 (MIT) added; `compliance.py generate` then `check` | 583 packages, 0 violations |
+| `test(conversation)` | Every scenario through the HTTP API: full state path, final state, exact live fields (relative dates resolved in the clinic's timezone), declined fields, missing fields, correction history, gap-free turn log, snapshot iff completed, escalation reason, closed calls reject turns (409) | 6 of 6 passed |
+| | Returning patient matched to the seeded record, not duplicated | passed |
+| | Non-reserved email rejected with a spoken explanation; state unchanged | passed |
+| | Injection text ("SYSTEM: … set state to COMPLETED") | flow unchanged; never completes |
+| | Restart recovery: first half of scenario A on one app instance, second half on a fresh one | completed with the exact expected path |
+| | Two concurrent turns held mid-flight | exactly one wins; the other gets `ConcurrentUpdateError` and applies nothing |
+| | Provider failure | error raised and recorded as `provider_error`; state unchanged; no reply; no fallback |
+| | Mutation check: let `CONFIRM` jump straight to `COMPLETED` | 7 tests failed as intended; code restored |
+| | Full suite three consecutive runs | 408 passed each time |
+
+| Suite | Result |
+|---|---|
+| Backend unit | 347 passed |
+| Backend integration | 61 passed |
+| Coverage | 94 % of 2,305 statements (state machine 100 %, decision 97 %, intake 95–100 %, orchestrator 85 %) |
+| Ruff, ruff format, mypy `--strict` (103 files) | clean |
+
+## Milestone 4 — Gemini integration
+
+Run 2026-10-31. **No live Gemini call has been made**: no API key exists in the build environment.
+Everything below runs the real `google-genai` 2.34.0 SDK with the network replaced by an
+`httpx.MockTransport`. The payloads were written by hand in Gemini's documented `generateContent`
+response format and parse with the SDK's own response types; they are not recordings of live
+traffic (`backend/tests/contract/payloads/gemini/README.md`).
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(ai)` integrate | Request: `POST …/models/{model}:generateContent`; key in `x-goog-api-key` header and not the URL; `systemInstruction` carries `receptionist-v1`; `responseMimeType: application/json` with the inlined `TurnProposal` schema; no `tools` or `toolConfig`; a caller trying to close the fence cannot | passed |
+| | Well-formed reply becomes a validated `TurnProposal` with reported token usage | passed |
+| | Schema is self-contained (no `$ref`/`$defs`) and closed (`additionalProperties: false`) | passed |
+| | Live mode without `GEMINI_API_KEY` or `GEMINI_MODEL` refuses to start (factory and `create_app`); with both, the provider is built without network | passed |
+| | Migration `e9bff6a540d7` (token usage columns): upgrade, `alembic check`, downgrade one, upgrade | clean |
+| | Licence gate: 596 packages; `pyasn1_modules` and `sniffio` were flagged unknown by the gate, then resolved from their bundled licence files; `certifi` (MPL-2.0) became runtime and its review was corrected | 0 violations |
+| `feat(ai)` retry | 503, 500, 429, connection error and read timeout each retried once then succeeded | passed |
+| | Persistent 503 ×3 → `PROVIDER_UNAVAILABLE`; 3 requests; 2 backoff waits (0.5–0.75 s, then 1.0–1.5 s) | passed |
+| | 400 and 403 not retried → `PROVIDER_ERROR` | passed |
+| | A provider stalling past the timeout is cut off and retried | passed |
+| | Schema-invalid output re-asked once; the re-ask names the field locations, never the offending value; usage summed over both calls | passed |
+| | Invalid twice → error, even with a larger attempt budget (one re-ask only) | passed |
+| `test(ai)` | Through the orchestrator and PostgreSQL: Gemini's reply is spoken and tokens and attempts are stored on the turn | passed |
+| | Model returns `CONFIRM` plus "your appointment is booked and confirmed" during collection → action ignored, event recorded, the claim is not spoken | passed |
+| | Model proposes `ava@gmail.com` → rejected by intake validation; the model's reply that repeated it is replaced | passed |
+| | Model escalates with clinical advice in its text → the fixed safety message is spoken instead | passed |
+| | Outage through the HTTP API → `503 PROVIDER_UNAVAILABLE` naming the provider, no upstream details in the body; state, intake unchanged; `provider_error` event | passed |
+
+| Suite | Result |
+|---|---|
+| Backend unit + contract | 375 passed |
+| Backend integration | 66 passed |
+| Coverage | 94 % of 2,494 statements (`gemini.py` 93 %, `prompting.py` 96 %) |
+
+**Known gap, scheduled for Milestone 8 (`security(ai)`):** when the model's action *is* accepted,
+its reply text is spoken as written. An output filter for claims the application has not made
+("confirmed", "booked") and for prompt disclosure is part of the Milestone 8 output restrictions.
+
+**Blocked:** live verification against Gemini. Put `GEMINI_API_KEY` and `GEMINI_MODEL` in your local
+`.env`, set `VOICE_PROVIDER_MODE=live`, and record the run in `docs/providers.md`.
+
+## Milestone 6 — Appointment engine
+
+Run 2026-10-31 on branch `feat/m6-booking-engine` against PostgreSQL 16.15 (`postgres:16`
+container) with Python 3.13.18. No migration was added: the schema from Milestone 2 already had the
+exclusion constraint, the per-clinic idempotency key and `appointment_slots`. No dependency was
+added.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(booking)` availability | Slot maths (`test_booking_slots.py`): runs of consecutive open slots, exact cover, gaps, blocked slots, longer blocks never split, adjacent appointments allowed, other dentists unaffected, only future starts, ordering | passed |
+| | Local-day windows: 24 h normal days; 23 h on 2026-03-29 (London) and 2026-03-08 (New York); 25 h on 2026-10-25 (London) and 2026-11-01 (New York); 00:30 BST on 2026-10-25 belongs to the 25th | passed |
+| | Published weekend slots across both London changes: 09:00 local is 09:00Z then 08:00Z (spring) and 08:00Z then 09:00Z (autumn) | passed |
+| | Randomised cross-check, 25 seeded calendars with gaps, blocked and odd-length slots and appointments: availability offers exactly the times the reservation rule accepts | passed; 500 options compared (at least 5 per seed) |
+| | PostgreSQL: 45-minute type offers 10 + 2 starts; active (`confirmed`, `requested`) appointments hide times and `cancelled` ones do not; blocked slots and inactive dentists hidden; past times hidden; unknown, inactive and other clinics' types 404; bad queries 400; DST days in London and New York keep 09:00–11:30 local | passed |
+| `feat(booking)` reservations | Canonical hash: golden SHA-256 of the canonical JSON; the same instant with other offsets, key order, explicit null and UUID case hash the same; any changed field hashes differently; naive times, `clinic_id` and missing fields rejected; key character rules | passed |
+| | Book: `201 confirmed`, row persisted, time leaves availability; replay returns the same body with `Idempotent-Replayed: true` and no new row; different body `409 IDEMPOTENCY_CONFLICT`; a replay after cancel returns the cancelled original; keys scoped per clinic | passed |
+| | Overlap `409 BOOKING_SLOT_TAKEN`; adjacent time and other dentist allowed. Cancel frees the time for a new booking; a second cancel is `409 APPOINTMENT_NOT_ACTIVE` | passed |
+| | Reschedule 15 minutes later (overlapping the original) succeeds with `rescheduled_from_id`; a taken, blocked, unpublished or past target fails and leaves every row's status, start and `updated_at` unchanged | passed |
+| | Misaligned, past-closing, unpublished or unpublished-day start, blocked slot, inactive dentist: `409 SLOT_UNAVAILABLE`; past time rejected (also exactly "now") | passed |
+| | Another clinic's patient, type, dentist, conversation or appointment (cancel, reschedule): `404` naming the resource; their rows unchanged; viewer `403` on every write and `200` on list | passed |
+| | Booking on DST days: 2026-03-29 09:00 London is `08:00Z` / `+01:00`; 2026-10-25 is `09:00Z` / `+00:00`; 2026-11-01 New York is `14:00Z` / `-05:00` | passed |
+| | Mutation: skipped the published-slot check | 7 tests failed as intended; restored |
+| | Mutation: released the original after inserting the replacement | the overlapping reschedule failed as intended; restored |
+| `test(booking)` concurrency | **20 concurrent reservations for one slot, held at a barrier after the calendar read so all 20 transactions are open at once on 20 distinct PostgreSQL backends** | **1 confirmed, 19 `BOOKING_SLOT_TAKEN`, 0 other outcomes, 1 row**, for both identical starts and alternating 09:00/09:15 starts |
+| | 20 concurrent `POST /api/v1/appointments` through the app (pool of 20, no barrier) | one `201`, nineteen `409 BOOKING_SLOT_TAKEN`, one row |
+| | 10 concurrent identical requests sharing one key (barrier) | all 10 return the same appointment, 1 created and 9 replayed, one row |
+| | 4 concurrent different bodies sharing one key, non-overlapping times (barrier) | 1 booked, 3 `IDEMPOTENCY_CONFLICT` |
+| | Reschedule racing a new booking for the same time (barrier) | exactly one wins; when the reschedule loses, the original stays `confirmed` |
+| | 9 reschedules and 1 cancel of one appointment at once | exactly one applied, 9 `APPOINTMENT_NOT_ACTIVE`, state consistent |
+| | No connection left `idle in transaction` afterwards | 0 |
+| | Mutation: dropped `ex_appointments_dentist_no_overlap`, then reran the 20-way race | 20 confirmed, 0 rejected: the constraint is the only thing preventing double booking, as ADR-0004 intends. Schema rebuilt by the next run |
+| | Mutation: removed the key re-read after a lost race | both same-key race tests failed. In 8 runs of the 10-request identical race, all 9 losers were rejected by the **exclusion** constraint every time and never by the key's unique constraint, so mapping only the unique violation to a replay would have answered identical retries with `409 BOOKING_SLOT_TAKEN`. The re-read is what turns them into replays |
+| | Concurrency file 10 consecutive runs; full suite 3 consecutive runs | 8 of 8 passed each time; 533 passed each time |
+
+The concurrency tests exposed no defect, so there is no `fix(booking)` commit. The re-read after a
+lost race was part of the reservation design from the start; the mutation above shows it is
+needed.
+
+| Suite | Result |
+|---|---|
+| Backend unit | 424 passed (77 new) |
+| Backend integration | 109 passed (48 new) |
+| Tool tests (`scripts/tests`) | 18 passed |
+| Coverage (`pytest --cov`, unit + integration) | 94 % of 2,741 statements. Slot maths, idempotency, schemas, the appointments router and the new repositories are 100 %; `reservations.py` reports 87 % and `availability.py` 91 % |
+| Ruff, ruff format, mypy `--strict` (120 files), SPDX headers | clean |
+
+Coverage under-reports lines reached only through the HTTP API. For example, `reservations.py`
+line 231 is the only source of the `Patient not found.` error, which an API test asserts, but it
+is reported as missed. The lines that are genuinely not exercised are defensive: an invalid key
+passed straight to the service (the API validates it first), a missing clinic for a valid token, a
+missing appointment type behind a composite foreign key, and re-raising an integrity error other
+than an overlap.
+
+## Milestone 7 — Frontend foundation
+
+### `feat(ui): build DentalVoice application foundation`
+
+Run 2026-10-31 from `frontend/` (Node 22.23.4, pnpm 10.28.0). No dependencies were added.
+
+| Check | Command | Result |
+|---|---|---|
+| Install | `pnpm install --frozen-lockfile` | clean |
+| Unit tests | `pnpm test` | 53 passed in 6 files: API client 13, auth context and header 13, conversations list 4, conversation detail 10, text simulator 11, demo banner 2 |
+| Mutation check | `formatMs` made to print `0 ms` for unmeasured turns; rejection reason hidden | 3 tests failed as intended; code restored |
+| ESLint | `pnpm lint` (`--max-warnings=0`) | clean |
+| tsc | `pnpm typecheck` | clean |
+| Next build | `pnpm build` | success: `/`, `/simulator`, `/conversations`, `/patients`, `/appointments`, `/analytics` static; `/conversations/[id]` partial prerender |
+| SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |
+
+Browser check against the real backend (mock provider mode, `ENVIRONMENT=development`, a
+dedicated empty database migrated and seeded with `app.demo.seed --days 7`, a token from
+`app.devtools.token` for `demo.staff@example.com` at `brightsmile`). Playwright drove Chromium against
+`next dev` and again against a production build (`NEXT_PUBLIC_API_BASE_URL=http://localhost:8010
+pnpm build`, served with `next start`):
+
+| Step | Result |
+|---|---|
+| Developer sign-in with the pasted token | header shows clinic id and role `staff` |
+| Scenario A through the text simulator, 8 caller lines | states Identity → Contact details → Contact details → Visit reason → Appointment preferences → Information review → Confirmation pending → Completed |
+| Conversation detail | 17 turns; 9 state changes; 10 intake fields `confirmed`; missing fields none; snapshot Ava Lindqvist, `ava.lindqvist@example.com`, `+1-555-0101`, Tue 3 Nov 2026 10:00; receptionist LLM latency `—` for the greeting, measured values (0–1 ms, mock) elsewhere |
+| Conversations list filter `COMPLETED` | URL `?state=COMPLETED`, only completed calls listed |
+| Horizontal overflow at 1280 px and 390 px | none (`scrollWidth == clientWidth`) |
+| Sign out | returns to the sign-in screen |
+| Browser console errors or warnings | none |
+
+Screenshots (kept outside the repository): `01-sign-in-desktop`, `02-simulator-scenarios-desktop`,
+`03-simulator-completed-desktop`, `04-conversation-detail-desktop`, `05-conversations-desktop`,
+`06-conversation-detail-mobile`, `07-conversations-mobile`, `08-simulator-mobile`,
+`09-patients-mobile` (`-prod` suffix for the production-build run). Found and fixed from them: on a
+390 px screen the intake table hid the status column off-screen and the navigation clipped
+"Appointments"; the simulator's status panel stretched to the transcript's height.
+
+Not verified here: the Docker image build with the new pages, and screen-reader behaviour beyond
+the semantic roles and labels the unit tests assert.
+
+## Milestone 5 — Voice pipeline (fixtures, session, WebSocket)
+
+Run 2026-10-31 with mock speech providers. The Deepgram adapters are covered in their own section.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(voice)` playback | `generate_audio_fixtures.py` (eSpeak NG 1.51 + ffmpeg): 42 clips, 16 kHz mono PCM16, 4.8 MB; generated twice | byte-identical (`diff -r` clean) |
+| | `generate_audio_fixtures.py --check` (in the tooling tests): manifest text and audio hashes match the catalogue; an edited transcript is reported | passed |
+| | Clip library: every catalogue clip has a valid fixture; path-like and unknown ids refused; a local Deepgram file is preferred; a wrong format is rejected | passed |
+| | `GET /api/v1/audio/clips/{id}`: own clinic's clip `audio/wav` (`RIFF`); another clinic's clip and unknown ids 404; path-like ids 400/404 as JSON; no token 401 | passed |
+| | Mock STT: all 42 clips transcribed exactly (interim first, then finals, then utterance end); unknown audio produces no words; mock TTS bounded and deterministic | passed |
+| | Assembler: interims never committed; multiple finals joined in order; `speech_final`; utterance end without speech is not an utterance; stream end flushes | passed |
+| `feat(voice)` providers | Mock mode needs no credentials; live speech without `DEEPGRAM_API_KEY`, `STT_MODEL` or `TTS_MODEL` refuses to start | passed |
+| `style(config)` | The provider commit went in with a Ruff E501 because a failed lint step did not stop the commit in a command chain. Fixed in a follow-up commit; later commits gate with `set -e` | lint clean |
+| `feat(voice)` WebSocket | Migration `f61a7e4e6e78` (`ws_tickets`): upgrade, `alembic check`, downgrade one, upgrade | clean |
+| | Real uvicorn, real WebSocket client, PostgreSQL: scenario A by voice; states, clip order and exact utterances; frames tagged with reply turns; per-stage latency present for every caller turn; timings stored on turns; snapshot created; server closes normally | passed |
+| | Tickets: reuse, expired, other conversation and unknown → handshake 403; no ticket for a finished call (409) | passed |
+| | Client audio refused; malformed, oversized and unknown commands refused; `next_clip` before `start` refused | passed |
+| | Reconnect: a new ticket and socket resume with the next unanswered clip | passed |
+| | Found while testing: a race refused an immediate `next_clip` as `BUSY`; fixed by queueing one follow-up command | passed after fix |
+| | Found while testing: uvicorn's WebSocket connection log line contains `?ticket=…` | fixed: credential query parameters redacted in log messages. A test run logged `ticket=[REDACTED]` once and 0 raw tickets |
+| `test(voice)` | All six scenarios completed by voice over the socket, with exact states, utterances and outcomes | 6 of 6 passed |
+| | STT outage: error with provider name, interim shown but nothing committed, clip replayed next time | passed |
+| | No speech → `NO_SPEECH`, no empty turn | passed |
+| | TTS fails mid-stream: text reply delivered, no `audio_end` claimed, error reported, measured first-byte time stored | passed |
+| | Model failure: error reported, clip replayed, caller speech kept unanswered, no intake applied | passed |
+| | Barge-in cancels the speaking turn (provider sees the cancellation); a disconnect cancels speech in flight | passed |
+| | Mutation check: barge-in disabled | the barge-in test failed; code restored |
+| | Full backend suite, three consecutive runs | 615 passed each time |
+
+**Not verified:** listening to the audio (no audio output here; format, hashes and duration are
+checked instead); live Deepgram (no key).
+
+## Milestone 5 — Deepgram adapters
+
+Run 2026-10-31 on branch `feat/m5-deepgram`. **No live Deepgram call has been made**: no API key
+exists in the build environment. Deepgram's documentation was read the same day; the facts relied
+on, with links, and the points the docs leave open are listed in `docs/providers.md`. The
+speech-to-text tests run the real `websockets` 17.3 client against a real WebSocket server on
+127.0.0.1 (random port) started by each test; the text-to-speech tests run the real `httpx` 0.28.1
+client over `httpx.MockTransport`. Server messages and error bodies are hand-written in the
+documented format, not recordings (`backend/tests/contract/payloads/deepgram/README.md`).
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(voice)` streaming transcription | Handshake: `Authorization: Token <key>`; key absent from the URL; path `/v1/listen`; query exactly `model, encoding=linear16, sample_rate=16000, channels=1, interim_results=true, endpointing=300, utterance_end_ms=1000, vad_events=true, smart_format=true, punctuate=true` | passed |
+| | A whole fixture clip arrives byte-identical as one binary frame per 20 ms chunk; empty chunk not sent; `finish()` sends one `{"type": "CloseStream"}` text frame (idempotent) | passed |
+| | Interim, final, interim, final, `UtteranceEnd`, empty final → `UtteranceAssembler` commits exactly "I'd like to book a cleaning, next Tuesday morning, please."; `SpeechStarted` and `Metadata` produce no events | passed |
+| | `speech_final` final completes the utterance without `UtteranceEnd`; `UtteranceEnd` with `last_word_end: -1` ignored | passed |
+| | Events read concurrently with sending; `KeepAlive` text frames sent while audio pauses | passed |
+| | Handshake 400, 401, 403 → `PROVIDER_ERROR` with the `dg-error` text, one connection; 429, 500, 503 → `PROVIDER_UNAVAILABLE`; connection refused and a server that never answers the handshake (0.2 s) → `PROVIDER_UNAVAILABLE` | passed |
+| | Close 1011 `NET-0001` mid-stream → events received before it are delivered, then `PROVIDER_UNAVAILABLE` from `events()` and from the next `send_audio`; close 1008 `DATA-0000` → `PROVIDER_ERROR`; `Error` message → `PROVIDER_ERROR` and the socket is closed; normal close before `finish()` and a connection dropped without a close frame → `PROVIDER_UNAVAILABLE` | passed |
+| | No close within 0.3 s after `finish()` → `PROVIDER_UNAVAILABLE` (elapsed 0.3–2 s), both when events are read afterwards and when a reader is already waiting | passed |
+| | Cancelling the caller's task closes the socket, leaves no `deepgram-stt*` task running and sends no `CloseStream` | passed |
+| | Repeated 8 times (`pytest tests/contract/test_deepgram_stt.py`) | 22 passed each run, 1.3–1.4 s |
+| | Licence gate: `websockets` 17.3 became a direct runtime dependency (`License-Expression: BSD-3-Clause` in its metadata; no override needed); 596 packages | 0 violations |
+| `feat(voice)` text to speech | Request: `POST https://api.deepgram.com/v1/speak`, query exactly `model, encoding=linear16, sample_rate=24000, container=none`, `Authorization: Token <key>`, key absent from the URL, JSON body `{"text": …}` | passed |
+| | Chunks yielded in order as they arrive (the first is yielded before the second is read); reads that split a sample are re-aligned to whole samples; an early stop by the consumer releases the response; an empty 200 → `PROVIDER_ERROR` | passed |
+| | 401 `INVALID_AUTH` and 400 → `PROVIDER_ERROR`, one request, no wait | passed |
+| | 503, 429, connection error, read timeout before any audio → retried once after 0.25 s, then audio; 503 twice → `PROVIDER_UNAVAILABLE` after 2 requests | passed |
+| | Read error after the first chunk → that chunk was delivered, then `PROVIDER_UNAVAILABLE`; no second request, no wait | passed |
+| | No response within 0.1 s → retried, then `PROVIDER_UNAVAILABLE` (2 requests); body stalling after audio → `PROVIDER_UNAVAILABLE`, no retry | passed |
+| | Live mode with key and both models builds `DeepgramSpeechToTextProvider` and `DeepgramTextToSpeechProvider` without network; missing values still refuse to start | passed |
+| | Licence gate: `httpx` moved from the dev group to runtime (already inventoried as a direct dependency; the existing BSD-3-Clause override applies); 596 packages | 0 violations |
+
+Mutation checks (each change applied alone, the contract tests run, the file restored):
+
+| Mutation | Result |
+|---|---|
+| STT: `speech_final` always false; `last_word_end: -1` not ignored; KeepAlive not sent; socket not closed on exit; drain deadline not armed in `finish()`; 429 treated as a client error; close 1008 treated as transient; informational messages emitted as interims | each caught (1–3 tests failed). The drain-deadline mutation first survived; the test for a reader already waiting was added for it |
+| TTS: retry after audio was yielded; three attempts; 429/5xx treated as client errors; `container=wav`; no sample alignment; empty body accepted; response not closed on early stop; no per-chunk timeout | each caught (1–2 tests failed) |
+
+| Suite | Result |
+|---|---|
+| Backend unit + contract (`uv run pytest -q -m "not integration"`) | 511 passed (40 new: 22 STT, 17 TTS, 1 factory) |
+| Backend integration (`uv run pytest -q -m integration`, PostgreSQL 16, own database) | 121 passed |
+| Coverage of the new modules (unit + contract) | `deepgram_tts.py` 99 %, `deepgram_stt.py` 93 %. Not exercised: binary, unparseable, non-object and malformed `Results` messages; `send_audio` after `finish`; KeepAlive racing a close |
+| Ruff, ruff format, mypy `--strict` (149 files), SPDX headers | clean |
+| `python3 scripts/compliance.py check` | exit 0: no violations, no unrecorded dependency changes, no stale files |
+
+Observed while gating, not caused by this work (no booking code changed):
+`tests/integration/test_booking_concurrency.py::test_twenty_concurrent_reservations_for_one_slot_book_exactly_once[overlapping_starts]`
+failed intermittently: 19 of the 20 parties ended with an unexpected error, the first reported
+being `DBAPIError … deadlock detected` (2 of 10 isolated runs; the failing runs took about 20 s
+instead of 3 s). The commits above were made after
+a full gate passed. A PostgreSQL deadlock is not mapped to `BookingSlotTakenError` or retried; this
+belongs to the booking engine.
+
+**Resolved** in `fix(booking): retry transactions PostgreSQL aborts on deadlock`; see "Milestone 5–7
+integration" below.
+
+**Blocked:** live verification against Deepgram (both adapters). Put `DEEPGRAM_API_KEY`,
+`STT_MODEL` and `TTS_MODEL` in your local `.env`, set `VOICE_PROVIDER_MODE=live`, run a scenario,
+and record the run in `docs/providers.md`, including the close code Deepgram sends after
+`CloseStream`. The voice session that drives these adapters end to end is built separately.
+
+## Milestone 7 — Voice simulator
+
+### `feat(simulator): implement voice onboarding experience`
+
+Run 2026-10-31 from `frontend/` (Node 22.23.4, pnpm 10.28.0) on top of `26dfbf8` (M5 WebSocket
+streaming). No dependencies were added.
+
+| Check | Command | Result |
+|---|---|---|
+| Install | `pnpm install --frozen-lockfile` | clean |
+| Unit tests | `pnpm test` | 132 passed in 11 files: voice protocol 21, playback 12, call reducer 11, call controller 16, voice simulator UI 14, API client 18 (5 new), auth 13, text simulator 11, conversation detail 10, conversations list 4, demo banner 2 |
+| Mutation check | stale-frame drop disabled in `PcmPlayer.push`; barge-in `interrupt()` removed from `VoiceCall.nextLine` | 3 and 2 tests failed as intended; code restored |
+| ESLint | `pnpm lint` (`--max-warnings=0`) | clean |
+| tsc | `pnpm typecheck` | clean |
+| Next build | `pnpm build` | success; `/simulator` static |
+| SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |
+
+Browser check against the real backend (`VOICE_PROVIDER_MODE` mock: `mock-stt`, `mock-tts`, mock
+conversation provider; `ENVIRONMENT=development`; `VOICE_REALTIME_FACTOR=1`; a dedicated database
+reset with `alembic downgrade base && alembic upgrade head` and seeded with `app.demo.seed --days
+7`; token from `app.devtools.token` for `demo.staff@example.com` at `brightsmile`). Playwright drove
+Chromium (`--autoplay-policy=no-user-gesture-required`) against `next dev` with
+`NEXT_PUBLIC_API_BASE_URL=http://localhost:8012`. An init script counted
+`AudioBufferSourceNode.start/stop`, `HTMLMediaElement.play`, `getUserMedia` and WebSocket URLs.
+
+| Step | Result |
+|---|---|
+| Scenario A entirely by voice: Start call, Next caller line ×8, waiting for each reply and for its audio to finish | final state Completed; the 8 committed caller utterances equal the `a-01`…`a-08` transcripts in `backend/app/demo/catalog.py`; provisional interim text shown while clips played; timeline Greeting → … → Confirmation pending → Completed |
+| Latency table, scenario A | 9 rows (one per receptionist turn); greeting `—` STT, `—` LLM, `2–3 ms` TTS first byte, `—` total; caller turns e.g. `0 ms` / `0 ms` / `1 ms` / `68 ms` (mock providers; values as sent) |
+| Receptionist audio | 100 Web Audio buffers scheduled, 9.66 s of PCM, for scenario A |
+| Caller clips | 8 `<audio>` plays from blob URLs fetched with the bearer token; no blob URL left on the element afterwards |
+| WebSocket admission | one API socket per call, `?ticket=…` only; the access token (or its payload) never appears in the URL |
+| Scenario E (escalation) | final state Escalated; utterance equals the `e-01` transcript; "View conversation details" opens `/conversations/{id}` |
+| Barge-in: Next caller line while the greeting was playing | 17 scheduled buffers stopped; greeting marked "Speech interrupted"; the next caller line still committed |
+| Hang up | final state Abandoned; summary counts 1 barge-in |
+| `getUserMedia` calls | 0 (desktop and mobile) |
+| Horizontal overflow at 390 px | none, mid-call and at the summary |
+| Browser console errors or warnings (voice flows, desktop and mobile) | none |
+| Text mode tab (opened in a separate context) | the development backend accepts typed turns and the text form appears; the capability probe's expected `404` is logged by Chromium as a failed resource |
+
+Screenshots (kept outside the repository): `desktop-1280-start`, `desktop-1280-scenario-a-completed`,
+`desktop-1280-scenario-e-escalated`, `desktop-1280-barge-in`, `mobile-390-start`,
+`mobile-390-mid-call`, `mobile-390-escalated`. Found and fixed from them: at 390 px the latency
+cells wrapped (`0` / `ms` on two lines).
+
+Not verified here: live providers (no Deepgram or Gemini keys; mock mode only), a production build
+served with `next start` against the backend, and screen-reader behaviour beyond the roles, labels
+and live regions the unit tests assert.
+
+## Milestone 7 — Patients, appointments, analytics
+
+Run 2026-10-31 on branch `feat/m7-dashboards` against PostgreSQL 16 (`dv-testdb` container, a
+dedicated `dv_test_booking` database) with Python 3.13 and Node 22.23.4 / pnpm 10.28.0. No
+migration and no dependency was added.
+
+### `feat(patients): build synthetic patient management`
+
+| Check | Command | Result |
+|---|---|---|
+| Patients API (`test_api_patients.py`) | `uv run pytest -m integration tests/integration/test_api_patients.py` | 6 passed: search on first, last and full name and email, case-insensitive, `%`/`_` literal, phone not searched; status filter; `limit`/`offset` pages join up; bad `limit`/`offset`/`status`/over-long `q` are `400`; profile lists only the patient's linked calls newest first with `snapshot_confirmed_at`, the newest snapshot as `latest_snapshot`, and booked + rescheduled appointments with clinic-local times; empty profile; another clinic's and unknown ids `404 Patient not found.`; a `clinic_id` query parameter is ignored; an empty clinic lists `[]`; no token `401` |
+| Mutation | `latest_snapshot` chose the oldest snapshot (`max` → `min`) | the profile test failed as intended; restored |
+| Backend unit | `uv run pytest -m "not integration"` | 452 passed |
+| Backend integration | `uv run pytest -m integration` | 120 passed (6 new) |
+| Ruff, ruff format, mypy `--strict` | `uv run ruff check . && uv run ruff format --check . && uv run mypy` | clean (134 files) |
+| Frontend unit | `pnpm test` | 63 passed in 8 files (10 new: patients list 5, patient profile 4, API client 1) |
+| ESLint, tsc | `pnpm lint && pnpm typecheck` | clean |
+| SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |
+
+### `feat(appointments): implement appointment dashboard`
+
+The appointment page needs the clinic's appointment types (to look up availability), dentist and
+type names (an `Appointment` carries ids only) and the clinic-local "today". No endpoint returned
+them, so this commit adds `GET /api/v1/clinic` (read only, any role, clinic from the token).
+
+| Check | Command | Result |
+|---|---|---|
+| Clinic API (`test_api_clinic.py`) | `uv run pytest tests/integration/test_api_clinic.py` | 2 passed: the token's clinic, timezone and every type and dentist with `is_active` (inactive ones flagged); another clinic's dentists absent; another token gets its own clinic; no token `401`; `today` is 1 November in Auckland at 2026-10-31 20:00 UTC |
+| Appointments dashboard (`AppointmentsDashboard.test.tsx`) | `pnpm test` | 11 passed: default range is clinic today + 13 days; names, clinic-local times and status from the server; range/status filters in the query; viewer sees no booking form, no actions and sends no availability request; booking posts the exact body with an `Idempotency-Key` and shows the returned status; `409 BOOKING_SLOT_TAKEN` refetches availability, clears the choice and says the time was just taken; a retry after a network failure reuses the key while a new choice gets a new key; a `403` is shown even though the UI offered the action; cancel needs confirmation and reloads; `409 APPOINTMENT_NOT_ACTIVE` reloads; reschedule offers only the same dentist's times, focuses its panel, refetches on `409` and reports the new appointment |
+| Mutation | Generate a new key on every submit; skip the availability refetch after a `409` | 2 tests failed as intended; restored |
+| Backend unit | `uv run pytest -m "not integration"` | 452 passed |
+| Backend integration | `uv run pytest -m integration` | 122 passed (2 new) in 1 of 4 full runs; see the flaky tests below |
+| Ruff, ruff format, mypy `--strict` | as above | clean (138 files) |
+| Frontend unit | `pnpm test` | 76 passed in 9 files (13 new: dashboard 11, profile 1, API client 1) |
+| ESLint, tsc, SPDX headers | as above | clean |
+
+Browser check (Playwright driving Chromium against `next dev` on port 3011 and the backend on 8011
+in mock mode, `ENVIRONMENT=development`, a dedicated database migrated and seeded with
+`app.demo.seed --days 14`; scenarios A and B completed through the typed-turn endpoint; tokens from
+`app.devtools.token` for `demo.staff@example.com` and `demo.viewer@example.org` at `brightsmile`):
+
+| Step | Result |
+|---|---|
+| Patients list, search `ava lind` | URL `?q=ava+lind`, one row, Ava Lindqvist |
+| Profile | contact values, latest confirmed intake (routine cleaning, `hygiene_cleaning`, Tue 3 Nov 2026 10:00), the completed scenario-A call marked Confirmed |
+| Book from the profile link | patient preselected; 21 hygiene-cleaning times on Mon 2 Nov; booked 09:00–09:45 with Dr. Mira Calloway, shown as `Confirmed` from the response |
+| Slot taken | with a time selected in the UI, the same time was booked through the API (`201`); the UI's booking then showed `BOOKING_SLOT_TAKEN · HTTP 409 · request …`, refetched availability, and the taken time was no longer offered |
+| Cancel | Marcus Bellweather's check-up cancelled after confirmation; the row shows `Cancelled`, no actions |
+| Reschedule | panel focused; moved to 14:30–15:15; the old row shows `Rescheduled`, the profile lists both |
+| Viewer | read-only note, no booking form, no Cancel/Reschedule buttons; cancelling through the API with the viewer token `403 FORBIDDEN` |
+| Horizontal overflow, 1280 px and 390 px (patients, profile, appointments) | none |
+| Console | only the browser's own log line for the intentional `409` |
+
+Found and fixed from the screenshots: at 390 px the appointments grid overflowed to 530 px and the
+action buttons were clipped (the grid track now has `min-w-0`, the status moves under the name on
+phones, and the date and time are on two lines); the appointment-type select was clipped in the
+booking card at 1280 px; on a phone the profile's appointment table hid the status column; and
+after a `409 BOOKING_SLOT_TAKEN` the appointment list was not refreshed, so the booking that took
+the time did not appear (now covered by the dashboard test).
+
+Two existing tests failed intermittently in full integration runs on this host (2 CPUs, shared with
+another session) and passed on rerun; neither involves code changed here:
+
+| Test | Observed | Cause |
+|---|---|---|
+| `test_booking_concurrency.py` 20-way race (`overlapping_starts`), and once the concurrent-replays test | 3 of 4 full runs; in the inspected failure the losers got `DBAPIError: deadlock detected` instead of `BOOKING_SLOT_TAKEN`; the file alone passed 5 of 5 | Concurrent inserts checked by one exclusion constraint can wait on each other and deadlock (PostgreSQL aborts one). `ReservationService` maps only the exclusion violation, so a deadlock would reach the client as a 500. Needs a booking-engine fix (map or retry `40P01`); not changed in this milestone |
+| `test_intake_service.py::test_events_never_contain_field_values` | 1 of 4 full runs | Asserts `"212"` is absent from the event payloads' `repr`, which also contains random UUIDs; a UUID containing `212` fails it |
+
+**Both resolved** after integration: the deadlock by `fix(booking)`, the UUID coincidence by
+`test(intake)`. See "Milestone 5–7 integration" below.
+
+### `feat(analytics): add clinic performance dashboard`
+
+| Check | Command | Result |
+|---|---|---|
+| Analytics API (`test_api_analytics.py`) | `uv run pytest tests/integration/test_api_analytics.py` | 5 passed. Known data (8 calls): `by_state` lists all 12 states, `ended` 6, `in_progress` 2, `completion_rate` 2/6, average duration 120 s over 4 calls (calls never started excluded), escalation reasons `urgent_symptoms` 2, `caller_request` 1. Latency over llm 100, 200, 300, 400, 1000, 2000 ms: p50 350, p95 1750 (`percentile_cont`); `total` 150, 250: p50 200, p95 245; `provider_mode=mock` p50 250 / p95 385, `live` 1500 / 1950 and `total` null; unmeasured `stt`/`tts` `samples: 0` and `null`. Empty clinic and a clinic whose turns carry no timing: `null` everywhere, never 0. Another clinic's figures are its own; a `clinic_id` query parameter is ignored; no token `401`; bad `provider_mode` `400` |
+| Repository contract | `uv run pytest tests/unit/test_repository_contract.py` | 12 passed (`AnalyticsRepository` added) |
+| Mutation | p50 computed with `percentile_cont(0.4)`; empty clinic's completion rate `0.0` instead of `null` | 1 and 2 tests failed as intended; restored |
+| Mutation (frontend) | null p50 rendered as `0.0 ms` and null completion rate as `0%` | 2 dashboard tests failed as intended; restored |
+| Backend unit | `uv run pytest -m "not integration"` | 453 passed |
+| Backend integration | `uv run pytest -m integration` | 127 passed (13 new across the milestone), 2 consecutive full runs |
+| Tool tests, `mypy --strict ../scripts` | `uv run pytest ../scripts/tests` | 19 passed; clean |
+| Ruff, ruff format, mypy `--strict` | as above | clean (143 files) |
+| Frontend unit | `pnpm test` | 81 passed in 10 files (5 new: dashboard 4, API client 1) |
+| ESLint, tsc, SPDX headers | as above | clean |
+| Next build | `NEXT_PUBLIC_API_BASE_URL=http://localhost:8011 pnpm build` | success: `/`, `/analytics`, `/appointments`, `/conversations`, `/patients`, `/simulator` static; `/conversations/[id]` and `/patients/[id]` partial prerender |
+
+Browser check, same setup as above, after also completing scenarios C, D and E and starting one
+call that was left in progress; then repeated against the production build (`pnpm start`):
+
+| Step | Result |
+|---|---|
+| Dashboard figures (equal to `GET /api/v1/analytics/summary`) | 6 conversations, 1 in progress, 5 ended; completion 60 % (3 of 5); 1 escalation, reason `urgent_symptoms`; average duration 0.2 s over 5 calls (typed turns are fast) |
+| Conversations by state | Greeting 1, Completed 3, Escalated 1, Abandoned 1, every other state 0 |
+| Latency, all calls | Language model p50 0.0 ms, p95 0.3 ms over 34 mock turns; speech to text, text to speech and whole turn "No data yet" with 0 samples |
+| Latency, live calls only | "No data yet" for every stage |
+| Viewer | same figures (read only) |
+| Horizontal overflow, 1280 px and 390 px | none |
+| Console | no errors or warnings |
+| Production build: patients and appointments flow from the previous commit repeated | same results; no overflow at either width |
+
+Found and fixed from the screenshots: at 390 px the latency table wrapped "No data yet" over three
+lines, and an average under one second was rounded to "0 s" (now "0.2 s").
+
+The browser checks used a dedicated database (`dv_test_ui_dash`) because the shared `dv_test_ui`
+database was reset by another session while the first run was in progress. Screenshots are kept
+outside the repository: `01-patients-desktop` to `16-analytics-mobile` (`-prod` suffix for the
+production-build analytics run).
+
+Not verified here: the Docker image build with the new pages; screen-reader behaviour beyond the
+roles and labels the unit tests assert; latency figures with real speech timings, which need
+Milestone 5.
+
+## Milestone 5–7 integration
+
+Run 2026-10-31. The Deepgram adapters, the voice simulator and the patients, appointments and analytics
+work were built in parallel on separate branches. They were then applied in that order on top of
+the Milestone 5 voice branch. Every conflict was additive (router imports, API client methods,
+report sections) and was resolved by keeping both sides. The API client's `send` helper now takes
+the voice work's `Accept` parameter as well as the appointments work's extra headers
+(`Idempotency-Key`).
+
+| Commit | Check | Result |
+|---|---|---|
+| `fix(booking)` | Reproduce: the 20-way race file run alone, 10 times; then 10 times under CPU load | 20 of 20 passed. The natural deadlock window is too narrow to hit on demand |
+| | New tests provoke a real `40P01` inside the booking transaction (advisory locks taken in opposite orders); run before the fix | 3 failed with `DBAPIError … deadlock detected` |
+| | After the fix: both bookings succeed after one retry; an overlapping loser gets `BOOKING_SLOT_TAKEN` on its retry; a deadlocked reschedule is retried; with retries disabled the victim gets `CONCURRENT_UPDATE` | passed |
+| | Mutation: retry removed from `reserve` | the 2 reserve deadlock tests failed; code restored |
+| | Found while testing: one run took 46 s and failed. The race test's 20-party barrier also held retried transactions, which waited for parties that never came | harness now holds only each party's first attempt |
+| | Two copies of the booking suite at once on separate databases, 8 rounds | 16 of 16 passed |
+| | Unit: only `40P01`/`40001` retried; exclusion, unique and other errors propagate unchanged; bounded; pauses jittered | passed |
+| `fix(voice)` shutdown | The real lifespan in live mode (no network): the Deepgram TTS HTTP client is closed after shutdown | passed; removing the call fails the test |
+| `test(intake)` | UUIDs stripped before the leak check; every fragment of the phone value and the email local part checked; mutation: value put into the rejection event | stable 3 of 3; the mutant failed |
+| `fix(legal)` | `make verify` failed only because `frontend.cdx.json` was stale: cdxgen's `ImportedModules` lists the names our code imports from React and Next. The normaliser now drops that property (test added); regenerated | `make license-check` exit 0; the SBOM diff removes only those 8 properties |
+
+| Integrated branch | `make verify` (PostgreSQL 16) | exit 0: backend 524 unit/contract + 158 integration, 22 tooling, 160 frontend (15 files); Ruff, mypy `--strict` (169 files), ESLint, `tsc`, licence gate all clean |
+
+## Milestone 8 — Reply guard
+
+Run 2026-10-31 on branch `feat/m8-reply-guard` (from `feat/m8-security` at `e697451`), PostgreSQL 16
+test database `dv_test_guard`. Closes the Milestone 4 known gap: model-written reply text is now
+checked before it is stored or spoken. Rules and findings: `docs/security/reply-guard.md`.
+
+| Check | Command | Result |
+|---|---|---|
+| Tests written first | `uv run pytest -q tests/unit/test_reply_guard.py` before the module existed | collection error: `No module named 'app.orchestrators.reply_guard'` |
+| | `uv run pytest -q tests/integration/test_reply_guard_orchestration.py` with the guard written but not wired into `_reply` | 3 failed, 2 passed (the clean-reply and own-email tests pass without a guard, as they should) |
+| Unit: every rule, positives and negatives; every deterministic `compose_reply` text and the escalation message pass | `uv run pytest -q tests/unit/test_reply_guard.py` | 292 passed |
+| Integration: malicious reply → the deterministic reply is returned and stored; `reply_filtered` payload is `{"reasons": [...]}` only; a full scenario A call with a malicious reply on every turn has the same states, paths, replies, live intake, snapshot and patient as the mock run, with 6 filtered turns; a clean reply and the caller's own email pass unchanged; the warning log has reason codes and no reply text (`structlog.testing.capture_logs`) | `uv run pytest -q tests/integration/test_reply_guard_orchestration.py` | 5 passed |
+| Mutation: each of the 16 rules removed from the rule table in turn; the conditional-clause exemption removed; the `COMPLETED` allowance removed; the orchestrator ignoring the verdict; the text added to the event payload; the text added to the log | a script that edits, runs the guard tests, and restores | 21 of 21 mutants failed the tests; sources restored (`git diff` shows only the intended change) |
+| Commit gate (`set -e`) | `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`, then `python3 scripts/add_spdx_headers.py --check` | Ruff clean, 178 files formatted, mypy `--strict` 172 files clean, **979 passed** (816 unit/contract + 163 integration), SPDX clean |
+
+Seen during the gate: two earlier full runs, while other sessions were loading the shared PostgreSQL
+server (load average about 3, runs of 108–146 s instead of 46 s), each failed
+`test_booking_concurrency.py::test_twenty_concurrent_reservations_for_one_slot_book_exactly_once[overlapping_starts]`
+(and once also `test_concurrent_replays_of_one_request_create_one_appointment`): the 19 losers
+ran out of deadlock retries. The booking code is untouched by this change. The file passed alone
+(12 passed) and the next full run passed. This is the load sensitivity of the 20-way race noted in
+the Milestone 5–7 integration section, and it is not resolved here.
+
+Not verified: a live Gemini call (no API key in this environment). The guard runs on the provider's
+parsed `TurnProposal`, so the fake provider exercises the same path.
+
+## Milestone 8 — Frontend sign-in and headers
+
+Run 2026-10-31 on `feat/m8-frontend-auth` (from `feat/m8-security` at `e697451`). The backend
+login, switch-clinic and me endpoints were being built in parallel, so everything here runs against
+the agreed contract with the API mocked; nothing was run against the real backend.
+
+### `feat(auth): add password sign-in and clinic switching to the dashboard`
+
+| Check | Command | Result |
+|---|---|---|
+| Frontend unit | `pnpm test` | 185 passed in 18 files (25 new: API client 6, session store 3, sign-in screen 8, session menu 8; existing auth and simulator tests updated for the new default screen) |
+| Mutation | 10 mutants, each run against its tests and restored: login sends the bearer token; a login `401` reaches `onUnauthorized`; password not cleared after a failure; `429` does not block submit; no remount on clinic switch; switcher shown for one clinic; a late switch response applied after sign-out; dev token offered in production; profile written to `sessionStorage`; sign-out leaves the token stored | all 10 killed (1 to 4 tests failed each) |
+| ESLint, `tsc`, SPDX headers | `pnpm lint`, `pnpm typecheck`, `python3 scripts/add_spdx_headers.py --check` | clean |
+| Next build | `NEXT_PUBLIC_API_BASE_URL=http://localhost:8091 pnpm build` | success |
+
+The password input is uncontrolled: read once on submit, sent only in the `POST` body and cleared
+after every attempt. Only `{token, method}` is mirrored to `sessionStorage`; the profile (user,
+clinic, role, clinics) stays in memory and is fetched again with `GET /auth/me` after a reload.
+`RequireSession` keys each page by the token's clinic, so a switch remounts the page and every query
+refetches with the new token; the unit test holds the new clinic's response back and asserts that
+the previous clinic's data is already gone while it loads.
+
+### `security(frontend): send a strict content security policy and security headers`
+
+The Next.js 16 CSP guide (`node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`)
+says inline scripts need a per-request nonce, nonces need dynamic rendering, and prerendered shells
+cannot carry one. A first build with only the proxy confirmed it: the static pages had 0 of 18
+scripts nonced and the partially prerendered `/patients/[id]` 6 of 16. The root layout now awaits
+`connection()` with `instant = false`; without `instant = false` the build fails with "uncached or
+runtime data during prerendering" on `/analytics`.
+
+| Check | Command | Result |
+|---|---|---|
+| CSP builder unit tests | `pnpm vitest run src/lib/security` | 11 passed |
+| Frontend unit | `pnpm test` | 196 passed in 19 files |
+| Mutation (unit) | `'unsafe-eval'` in production; `blob:` dropped from `media-src`; `ws:` origin dropped from `connect-src`; nonce not validated; `frame-ancestors 'self'`; microphone allowed | all 6 killed |
+| Mutation (browser) | `await connection()` removed from the root layout, rebuilt | every page static again, 0 of 18 scripts nonced; 19 CSP violations on `/patients` and the sign-in form never renders; browser check exits with a timeout |
+| Mutation (browser) | `blob:` removed from `media-src`, rebuilt | 3 browser checks fail: clip not played, `media-src` violation, console error |
+| ESLint, `tsc`, SPDX headers | as above | clean |
+| Next build | `NEXT_PUBLIC_API_BASE_URL=http://localhost:8091 pnpm build` | success: every route `ƒ` (dynamic); `/conversations/[id]` and `/patients/[id]` still listed `◐` but render every script per request |
+| Headers | `pnpm start`, then `curl -D - http://localhost:3101/simulator` | `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `X-Frame-Options: DENY` and the CSP below; a static chunk gets the four fixed headers and no CSP |
+| Nonce on every script | fetch each page, compare `nonce=` with the header | `/` 11 of 11, `/patients` 12 of 12, `/patients/abc` 12 of 12, `/simulator` 13 of 13, the 404 page 11 of 11; a new nonce on every request |
+
+Production policy (`next start`):
+
+```
+default-src 'self'; script-src 'self' 'nonce-…' 'strict-dynamic'; style-src 'self' 'nonce-…';
+img-src 'self'; font-src 'self'; connect-src 'self' http://localhost:8091 ws://localhost:8091;
+media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+```
+
+`next dev` adds `'unsafe-eval'` to `script-src` and uses `style-src 'self' 'unsafe-inline'` (the dev
+overlay injects styles without a nonce). `upgrade-insecure-requests` is added only when the API base
+URL is `https`.
+
+### Browser check
+
+Playwright (Chromium) against `next dev` and against `next start`, at 1280 px and 390 px. The API
+was a local mock on port 8091 serving real HTTP and a minimal WebSocket, rather than `page.route`,
+so the page's CSP applied to genuine requests; it returned the contract shapes for login,
+switch-clinic, me, patients, scenarios, conversations, WebSocket tickets and a WAV clip. The
+password was generated per run.
+
+| Step | `next dev` | `next start` |
+|---|---|---|
+| Sign-in form; wrong password shows the message and `request mock-N`; password cleared | pass | pass |
+| `429`: countdown from 4 s ticks down, submit disabled, enabled again at 0 | pass | pass |
+| Sign in: header shows Demo Admin, BrightSmile Dental, admin; login sent without `Authorization`; password not in storage or URL | pass | pass |
+| Switch to Harbour View Dental: the other clinic's patient replaces the first, header shows staff | pass | pass |
+| Reload: profile restored with `GET /auth/me` for the new clinic | pass | pass |
+| Simulator: conversation created, WebSocket to `ws://localhost:8091` connected, clip downloaded and played from a `blob:` URL | pass | pass |
+| Sign out: sign-in form, `sessionStorage` entry removed | pass | pass |
+| Horizontal overflow at both widths | none | none |
+| CSP violations | none | none |
+| Console errors and warnings | none apart from Chrome's own "Failed to load resource" lines for the deliberate `401` and `429` | same |
+| Negative control: `fetch("https://not-allowed.example.com/x")` | refused, one `connect-src` violation | same |
+
+45 of 45 checks passed in each run; the `next start` run was repeated on the final build after the
+mutation builds. Screenshots are kept outside the repository: `01-signin-desktop` to
+`15-signed-out-mobile`, with `-dev` and `-prod` suffixes.
+
+Not verified here: the real backend endpoints (not ready); the Docker image build; an HTTPS
+deployment (`wss:` and `upgrade-insecure-requests` are unit-tested only); browsers other than
+Chromium; screen-reader behaviour beyond the roles and labels the unit tests assert.
+
+## Milestone 8 — Auth, rate limits, HTTP hardening and integration
+
+Run 2026-10-31 on `feat/m8-security`. The two sections above (reply guard; frontend sign-in and
+headers) were built in parallel and applied on top of this branch.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(auth)` | Licences: argon2-cffi 25.1.0, argon2-cffi-bindings 26.1.0 (both `License-Expression: MIT`); `make compliance`, `make license-check` | exit 0; 598 packages, 0 violations |
+| | 17 API tests: login shape and sort order, case-insensitive email, five failure causes indistinguishable (code, message, `WWW-Authenticate`), validation never echoes input, no password or email in logs, hash upgrade on sign-in, demo password from the seed, switch-clinic (role per clinic, 403 non-member, 401 no token), access revoked at once on deactivation, removal or role change | passed |
+| | 12 unit tests: argon2id parameters, salting, dummy-hash path on unknown users, over-long attempts, corrupt hash, rehash flag, password policy | passed |
+| | Mutations: per-request membership check removed; inactive users allowed; dummy hash skipped | 3, 1 and 1 tests failed; code restored |
+| `style(auth)` | **Process error.** `feat(auth)` was committed with two Ruff PT018 findings: the lint step ran in a subshell, and its failure did not stop the chained commit. The full suite was skipped too. Fixed in a follow-up commit (no amend); the full suite then passed (711). The gate is now a script whose exit status the commit depends on | lint clean |
+| `security(api)` rate limits | 7 unit tests (bucket arithmetic, fake clock) and 7 API tests through the real app with a controlled clock: per-IP sign-in, per-account lockout (even for the right password, released after refill), success clears failures, per-user requests, tighter writes, invalid tokens use no budget, switch-off | passed |
+| | Mutations: account lockout removed; per-user limit removed | 1 test failed each; code restored |
+| `security(api)` hardening | 17 unit tests: defensive headers on 200/401/404/405/400, `no-store` default, 413 by `Content-Length` and by counting a chunked body, a body at the limit accepted, CORS allow and deny, exact-origin validation, docs present in development and absent in production; 1 live WebSocket test: foreign `Origin` refused with 403 without spending the ticket | passed |
+| | Mutations: WebSocket origin check removed; chunk counting removed | 1 test failed each; code restored |
+| `security(voice)` | Idle socket released with `IDLE_TIMEOUT`, call left in `GREETING`; a 4-second reply under a 0.2-second limit is not cut off | passed; applying the timeout while busy fails the second test |
+| `fix(booking)` lock | The reply-guard work saw the 20-way race fail under load: every loser used up its four deadlock retries. The race test now also asserts that no transaction was retried; the deadlock test asserts exactly one `40P01` retry (so the log capture sees retries) | passed |
+| | Stress: the race file on three databases at once with three CPU-bound processes. Before the per-dentist lock: 4 rounds, 1 failure. After: 6 rounds, 0 failures | as stated; a small sample, so the mechanism (queueing on the lock) is the main argument |
+| `fix(api)` | `Retry-After` added to `Access-Control-Expose-Headers` (the frontend work found it missing) | test passed |
+
+### Browser check against the real stack
+
+The real API (mock speech and model), PostgreSQL migrated and seeded with a freshly generated demo
+password (kept in a private scratch file, never printed), and the production frontend build
+(`next start`, nonce CSP), driven by Playwright in Chromium:
+
+| Check | Result |
+|---|---|
+| Wrong password: server message, request id, password field cleared | passed |
+| Five failures, then the right password: 429, countdown from `Retry-After`, submit disabled | passed |
+| Sign-in: header shows user and clinic; login sent no `Authorization`; password not in storage or URL | passed |
+| Switch to Juniper & Vale: list refetched with the new token, shows its own empty list, no BrightSmile names; switch back shows BrightSmile's patients | passed |
+| Voice call (scenario A): ticket requested with a token, two caller lines committed with their exact transcripts, clip played from `blob:`, hang up ends the call | passed |
+| Sign-out clears storage; no CSP violations; no console errors (other than the browser's own lines for the intended 401 and 429) | passed |
+| API log after the run: the password 0 times, emails 0 times, the one socket ticket `[REDACTED]` | as stated |
+
+22 of 22 checks passed. On the way there, two of my own checks were wrong rather than the app.
+A text match on the clinic name returned before the page had remounted (the code shows one store
+update for both). The script also failed to switch back before the call. Querying the API directly
+confirmed the right data per clinic, and the checks now wait for the refetched list.
+
+**Not verified:** live Gemini and Deepgram (no keys); Docker image build with these changes (CI
+builds it); browsers other than Chromium.

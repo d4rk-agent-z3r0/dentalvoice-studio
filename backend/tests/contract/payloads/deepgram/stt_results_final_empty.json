@@ -1,0 +1,30 @@
+{
+  "type": "Results",
+  "channel_index": [
+    0,
+    1
+  ],
+  "duration": 0.2,
+  "start": 3.0,
+  "is_final": true,
+  "speech_final": false,
+  "from_finalize": true,
+  "channel": {
+    "alternatives": [
+      {
+        "transcript": "",
+        "confidence": 0.0,
+        "words": []
+      }
+    ]
+  },
+  "metadata": {
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "model_info": {
+      "name": "stt-test-model",
+      "version": "test",
+      "arch": "test"
+    },
+    "model_uuid": "00000000-0000-4000-8000-0000000000aa"
+  }
+}

@@ -1,6 +1,6 @@
 # ADR-0006: Single-use WebSocket tickets
 
-**Status:** Accepted · 2026-10-30
+**Status:** Accepted · 2026-10-30 · Implemented 2026-10-31 (Milestone 5: `ws_tickets`, migration `f61a7e4e6e78`)
 
 ## Context
 Browsers cannot set an `Authorization` header on a WebSocket handshake. Putting the long-lived access

@@ -367,8 +367,13 @@ def _drop_volatile_properties(node: Any) -> None:
             node["properties"] = [
                 prop
                 for prop in node["properties"]
-                if not str(prop.get("name", "")).startswith("cdx:npm:")
-                or prop["name"] in NPM_STABLE_PROPERTIES
+                if (
+                    not str(prop.get("name", "")).startswith("cdx:npm:")
+                    or prop["name"] in NPM_STABLE_PROPERTIES
+                )
+                # The names our source files import from a package: they change with every
+                # application code edit, not with dependencies.
+                and prop.get("name") != "ImportedModules"
             ]
         for value in node.values():
             _drop_volatile_properties(value)
@@ -385,6 +390,14 @@ def normalise_sbom(sbom: dict[str, Any]) -> dict[str, Any]:
     sbom.pop("annotations", None)
     metadata = sbom.get("metadata", {})
     metadata.pop("timestamp", None)
+    # cdxgen's evidence.occurrences lists the source lines that import each package. It changes
+    # with every application code edit, not with dependencies; identity evidence is kept.
+    for component in sbom.get("components", []):
+        evidence = component.get("evidence")
+        if isinstance(evidence, dict):
+            evidence.pop("occurrences", None)
+            if not evidence:
+                component.pop("evidence")
     text = json.dumps(sbom)
     for path in (str(ROOT), str(Path(tempfile.gettempdir()))):
         text = text.replace(path, ".")

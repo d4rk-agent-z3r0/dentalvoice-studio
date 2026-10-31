@@ -92,3 +92,17 @@ def test_level_filtering_applies(capsys: pytest.CaptureFixture[str]) -> None:
     logging.getLogger("sqlalchemy.engine").info("SELECT 1")
 
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        '127.0.0.1:1 - "WebSocket /api/v1/ws/conversations/abc?ticket=SECRET123" [accepted]',
+        "GET /x?token=SECRET123&page=2",
+        "callback?API_KEY=SECRET123",
+    ],
+)
+def test_credentials_in_library_messages_are_redacted(message: str) -> None:
+    event = redact_sensitive(None, "info", {"event": message})
+    assert "SECRET123" not in event["event"]
+    assert REDACTED in event["event"]
