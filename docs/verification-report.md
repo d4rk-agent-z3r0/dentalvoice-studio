@@ -324,3 +324,36 @@ Screenshots (kept outside the repository): `01-sign-in-desktop`, `02-simulator-s
 
 Not verified here: the Docker image build with the new pages, and screen-reader behaviour beyond
 the semantic roles and labels the unit tests assert.
+
+## Milestone 5 — Voice pipeline (fixtures, session, WebSocket)
+
+Run 2026-10-31 with mock speech providers. The Deepgram adapters are covered in their own section.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(voice)` playback | `generate_audio_fixtures.py` (eSpeak NG 1.51 + ffmpeg): 42 clips, 16 kHz mono PCM16, 4.8 MB; generated twice | byte-identical (`diff -r` clean) |
+| | `generate_audio_fixtures.py --check` (in the tooling tests): manifest text and audio hashes match the catalogue; an edited transcript is reported | passed |
+| | Clip library: every catalogue clip has a valid fixture; path-like and unknown ids refused; a local Deepgram file is preferred; a wrong format is rejected | passed |
+| | `GET /api/v1/audio/clips/{id}`: own clinic's clip `audio/wav` (`RIFF`); another clinic's clip and unknown ids 404; path-like ids 400/404 as JSON; no token 401 | passed |
+| | Mock STT: all 42 clips transcribed exactly (interim first, then finals, then utterance end); unknown audio produces no words; mock TTS bounded and deterministic | passed |
+| | Assembler: interims never committed; multiple finals joined in order; `speech_final`; utterance end without speech is not an utterance; stream end flushes | passed |
+| `feat(voice)` providers | Mock mode needs no credentials; live speech without `DEEPGRAM_API_KEY`, `STT_MODEL` or `TTS_MODEL` refuses to start | passed |
+| `style(config)` | The provider commit went in with a Ruff E501 because a failed lint step did not stop the commit in a command chain. Fixed in a follow-up commit; later commits gate with `set -e` | lint clean |
+| `feat(voice)` WebSocket | Migration `f61a7e4e6e78` (`ws_tickets`): upgrade, `alembic check`, downgrade one, upgrade | clean |
+| | Real uvicorn, real WebSocket client, PostgreSQL: scenario A by voice; states, clip order and exact utterances; frames tagged with reply turns; per-stage latency present for every caller turn; timings stored on turns; snapshot created; server closes normally | passed |
+| | Tickets: reuse, expired, other conversation and unknown → handshake 403; no ticket for a finished call (409) | passed |
+| | Client audio refused; malformed, oversized and unknown commands refused; `next_clip` before `start` refused | passed |
+| | Reconnect: a new ticket and socket resume with the next unanswered clip | passed |
+| | Found while testing: a race refused an immediate `next_clip` as `BUSY`; fixed by queueing one follow-up command | passed after fix |
+| | Found while testing: uvicorn's WebSocket connection log line contains `?ticket=…` | fixed: credential query parameters redacted in log messages. A test run logged `ticket=[REDACTED]` once and 0 raw tickets |
+| `test(voice)` | All six scenarios completed by voice over the socket, with exact states, utterances and outcomes | 6 of 6 passed |
+| | STT outage: error with provider name, interim shown but nothing committed, clip replayed next time | passed |
+| | No speech → `NO_SPEECH`, no empty turn | passed |
+| | TTS fails mid-stream: text reply delivered, no `audio_end` claimed, error reported, measured first-byte time stored | passed |
+| | Model failure: error reported, clip replayed, caller speech kept unanswered, no intake applied | passed |
+| | Barge-in cancels the speaking turn (provider sees the cancellation); a disconnect cancels speech in flight | passed |
+| | Mutation check: barge-in disabled | the barge-in test failed; code restored |
+| | Full backend suite, three consecutive runs | 615 passed each time |
+
+**Not verified:** listening to the audio (no audio output here; format, hashes and duration are
+checked instead); live Deepgram (no key).

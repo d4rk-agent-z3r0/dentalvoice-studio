@@ -224,3 +224,43 @@ async def test_reconnecting_resumes_with_the_next_clip(
         clip: dict[str, Any] = await client.until(lambda m: m["type"] == "clip")
         assert clip["clip_id"] == SCENARIO_A.clips[1].id
         await client.turn_done()
+
+
+SCENARIOS = [(clinic, scenario) for clinic in catalog.CLINICS for scenario in clinic.scenarios]
+
+
+@pytest.mark.parametrize(
+    ("clinic_spec", "scenario"), SCENARIOS, ids=[f"{c.slug}-{s.code}" for c, s in SCENARIOS]
+)
+async def test_every_scenario_completes_by_voice(
+    server: str,
+    session_factory: SessionFactory,
+    database_settings: Settings,
+    clinic_spec: catalog.Clinic,
+    scenario: catalog.Scenario,
+) -> None:
+    clinic = await load_clinic(session_factory, clinic_spec.slug)
+    token = await token_for(session_factory, database_settings, "demo.admin@example.com", clinic.id)
+    async with httpx.AsyncClient(base_url=server, headers=bearer(token)) as http:
+        conversation_id = await _conversation(http, clinic, scenario.code)
+        ticket = await _ticket(http, conversation_id)
+        async with websockets.connect(ws_url(server, conversation_id, ticket)) as connection:
+            client = VoiceClient(connection)
+            await client.until(lambda m: m["type"] == "ready")
+            await client.send("start")
+            await client.turn_done()
+            for _ in scenario.clips:
+                await client.send("next_clip")
+                await client.turn_done()
+            closed = await client.until(lambda m: m["type"] == "closed")
+        detail = (await http.get(f"/api/v1/conversations/{conversation_id}")).json()
+
+    received = client.received
+    states = ["CREATED", *[s for m in received.of("state") for s in m["path"]]]
+    assert states == [s.value for s in scenario.states]
+    assert closed["state"] == scenario.final_state.value
+    assert [m["text"] for m in received.of("utterance.final")] == [
+        c.transcript for c in scenario.clips
+    ]
+    assert detail["conversation"]["state"] == scenario.final_state.value
+    assert (detail["snapshot"] is not None) == (scenario.final_state.value == "COMPLETED")

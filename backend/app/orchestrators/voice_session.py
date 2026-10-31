@@ -25,7 +25,7 @@ import asyncio
 import struct
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterable, Callable
 from typing import Any, Protocol
 
 from app.core.logging import get_logger
@@ -93,7 +93,7 @@ class VoiceSession:
 
     # --- command loop ---------------------------------------------------------------------------
 
-    async def run(self, commands: AsyncIterator[dict[str, Any]]) -> None:
+    async def run(self, commands: AsyncIterable[dict[str, Any]]) -> None:
         """Process commands until the client leaves or the call ends."""
         progress = await self._conversations.voice_progress(self._clinic_id, self._conversation_id)
         await self._send(
