@@ -188,3 +188,24 @@ def test_normalise_sbom_drops_source_line_evidence_but_keeps_identity() -> None:
         "identity": [{"field": "purl", "confidence": 1}]
     }
     assert "evidence" not in components["pkg:npm/only-occurrences@1.0.0"]
+
+
+def test_normalise_sbom_drops_the_names_application_code_imports() -> None:
+    def sbom(imported: str) -> dict[str, Any]:
+        return {
+            "components": [
+                {
+                    "bom-ref": "pkg:npm/react@19.3.0",
+                    "properties": [
+                        {"name": "SrcFile", "value": "pnpm-lock.yaml"},
+                        {"name": "ImportedModules", "value": imported},
+                    ],
+                }
+            ]
+        }
+
+    # Importing one more hook from react is a code change, not a dependency change.
+    first = normalise_sbom(sbom("react,useState,react/useState"))
+    edited = normalise_sbom(sbom("react,useState,react/useState,useRef,react/useRef"))
+    assert first == edited
+    assert first["components"][0]["properties"] == [{"name": "SrcFile", "value": "pnpm-lock.yaml"}]

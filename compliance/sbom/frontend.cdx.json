@@ -13917,10 +13917,6 @@
       "name": "jest-dom",
       "properties": [
         {
-          "name": "ImportedModules",
-          "value": "@testing-library/jest-dom/vitest"
-        },
-        {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
         },
@@ -14038,10 +14034,6 @@
       ],
       "name": "react",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "react,useCallback,react/useCallback,useEffect,react/useEffect,useEffectEvent,react/useEffectEvent,useState,react/useState,react/use,Suspense,react/Suspense,useId,react/useId,FormEvent,react/FormEvent,ReactNode,react/ReactNode,useRef,react/useRef,createContext,react/createContext,useContext,react/useContext,useMemo,react/useMemo,useSyncExternalStore,react/useSyncExternalStore"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -18534,10 +18526,6 @@
       ],
       "name": "plugin-react",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "@vitejs/plugin-react"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -27518,10 +27506,6 @@
       "name": "eslint-config-next",
       "properties": [
         {
-          "name": "ImportedModules",
-          "value": "eslint-config-next/core-web-vitals,eslint-config-next/typescript"
-        },
-        {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
         },
@@ -28777,10 +28761,6 @@
       ],
       "name": "eslint",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "eslint/config,defineConfig,eslint/config/defineConfig,globalIgnores,eslint/config/globalIgnores"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -44300,10 +44280,6 @@
       "name": "next",
       "properties": [
         {
-          "name": "ImportedModules",
-          "value": "next,Metadata,next/Metadata,next/navigation,useRouter,next/navigation/useRouter,useSearchParams,next/navigation/useSearchParams,next/link,usePathname,next/navigation/usePathname"
-        },
-        {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
         },
@@ -48059,10 +48035,6 @@
       ],
       "name": "react",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "react,useCallback,react/useCallback,useEffect,react/useEffect,useEffectEvent,react/useEffectEvent,useState,react/useState,react/use,Suspense,react/Suspense,useId,react/useId,FormEvent,react/FormEvent,ReactNode,react/ReactNode,useRef,react/useRef,createContext,react/createContext,useContext,react/useContext,useMemo,react/useMemo,useSyncExternalStore,react/useSyncExternalStore"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -55889,10 +55861,6 @@
       ],
       "name": "vitest",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "vitest,afterEach,vitest/afterEach,vitest/config,defineConfig,vitest/config/defineConfig"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"

@@ -367,8 +367,13 @@ def _drop_volatile_properties(node: Any) -> None:
             node["properties"] = [
                 prop
                 for prop in node["properties"]
-                if not str(prop.get("name", "")).startswith("cdx:npm:")
-                or prop["name"] in NPM_STABLE_PROPERTIES
+                if (
+                    not str(prop.get("name", "")).startswith("cdx:npm:")
+                    or prop["name"] in NPM_STABLE_PROPERTIES
+                )
+                # The names our source files import from a package: they change with every
+                # application code edit, not with dependencies.
+                and prop.get("name") != "ImportedModules"
             ]
         for value in node.values():
             _drop_volatile_properties(value)
