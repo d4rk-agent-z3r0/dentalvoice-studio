@@ -357,3 +357,63 @@ Run 2026-10-31 with mock speech providers. The Deepgram adapters are covered in 
 
 **Not verified:** listening to the audio (no audio output here; format, hashes and duration are
 checked instead); live Deepgram (no key).
+
+## Milestone 5 — Deepgram adapters
+
+Run 2026-10-31 on branch `feat/m5-deepgram`. **No live Deepgram call has been made**: no API key
+exists in the build environment. Deepgram's documentation was read the same day; the facts relied
+on, with links, and the points the docs leave open are listed in `docs/providers.md`. The
+speech-to-text tests run the real `websockets` 17.3 client against a real WebSocket server on
+127.0.0.1 (random port) started by each test; the text-to-speech tests run the real `httpx` 0.28.1
+client over `httpx.MockTransport`. Server messages and error bodies are hand-written in the
+documented format, not recordings (`backend/tests/contract/payloads/deepgram/README.md`).
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(voice)` streaming transcription | Handshake: `Authorization: Token <key>`; key absent from the URL; path `/v1/listen`; query exactly `model, encoding=linear16, sample_rate=16000, channels=1, interim_results=true, endpointing=300, utterance_end_ms=1000, vad_events=true, smart_format=true, punctuate=true` | passed |
+| | A whole fixture clip arrives byte-identical as one binary frame per 20 ms chunk; empty chunk not sent; `finish()` sends one `{"type": "CloseStream"}` text frame (idempotent) | passed |
+| | Interim, final, interim, final, `UtteranceEnd`, empty final → `UtteranceAssembler` commits exactly "I'd like to book a cleaning, next Tuesday morning, please."; `SpeechStarted` and `Metadata` produce no events | passed |
+| | `speech_final` final completes the utterance without `UtteranceEnd`; `UtteranceEnd` with `last_word_end: -1` ignored | passed |
+| | Events read concurrently with sending; `KeepAlive` text frames sent while audio pauses | passed |
+| | Handshake 400, 401, 403 → `PROVIDER_ERROR` with the `dg-error` text, one connection; 429, 500, 503 → `PROVIDER_UNAVAILABLE`; connection refused and a server that never answers the handshake (0.2 s) → `PROVIDER_UNAVAILABLE` | passed |
+| | Close 1011 `NET-0001` mid-stream → events received before it are delivered, then `PROVIDER_UNAVAILABLE` from `events()` and from the next `send_audio`; close 1008 `DATA-0000` → `PROVIDER_ERROR`; `Error` message → `PROVIDER_ERROR` and the socket is closed; normal close before `finish()` and a connection dropped without a close frame → `PROVIDER_UNAVAILABLE` | passed |
+| | No close within 0.3 s after `finish()` → `PROVIDER_UNAVAILABLE` (elapsed 0.3–2 s), both when events are read afterwards and when a reader is already waiting | passed |
+| | Cancelling the caller's task closes the socket, leaves no `deepgram-stt*` task running and sends no `CloseStream` | passed |
+| | Repeated 8 times (`pytest tests/contract/test_deepgram_stt.py`) | 22 passed each run, 1.3–1.4 s |
+| | Licence gate: `websockets` 17.3 became a direct runtime dependency (`License-Expression: BSD-3-Clause` in its metadata; no override needed); 596 packages | 0 violations |
+| `feat(voice)` text to speech | Request: `POST https://api.deepgram.com/v1/speak`, query exactly `model, encoding=linear16, sample_rate=24000, container=none`, `Authorization: Token <key>`, key absent from the URL, JSON body `{"text": …}` | passed |
+| | Chunks yielded in order as they arrive (the first is yielded before the second is read); reads that split a sample are re-aligned to whole samples; an early stop by the consumer releases the response; an empty 200 → `PROVIDER_ERROR` | passed |
+| | 401 `INVALID_AUTH` and 400 → `PROVIDER_ERROR`, one request, no wait | passed |
+| | 503, 429, connection error, read timeout before any audio → retried once after 0.25 s, then audio; 503 twice → `PROVIDER_UNAVAILABLE` after 2 requests | passed |
+| | Read error after the first chunk → that chunk was delivered, then `PROVIDER_UNAVAILABLE`; no second request, no wait | passed |
+| | No response within 0.1 s → retried, then `PROVIDER_UNAVAILABLE` (2 requests); body stalling after audio → `PROVIDER_UNAVAILABLE`, no retry | passed |
+| | Live mode with key and both models builds `DeepgramSpeechToTextProvider` and `DeepgramTextToSpeechProvider` without network; missing values still refuse to start | passed |
+| | Licence gate: `httpx` moved from the dev group to runtime (already inventoried as a direct dependency; the existing BSD-3-Clause override applies); 596 packages | 0 violations |
+
+Mutation checks (each change applied alone, the contract tests run, the file restored):
+
+| Mutation | Result |
+|---|---|
+| STT: `speech_final` always false; `last_word_end: -1` not ignored; KeepAlive not sent; socket not closed on exit; drain deadline not armed in `finish()`; 429 treated as a client error; close 1008 treated as transient; informational messages emitted as interims | each caught (1–3 tests failed). The drain-deadline mutation first survived; the test for a reader already waiting was added for it |
+| TTS: retry after audio was yielded; three attempts; 429/5xx treated as client errors; `container=wav`; no sample alignment; empty body accepted; response not closed on early stop; no per-chunk timeout | each caught (1–2 tests failed) |
+
+| Suite | Result |
+|---|---|
+| Backend unit + contract (`uv run pytest -q -m "not integration"`) | 511 passed (40 new: 22 STT, 17 TTS, 1 factory) |
+| Backend integration (`uv run pytest -q -m integration`, PostgreSQL 16, own database) | 121 passed |
+| Coverage of the new modules (unit + contract) | `deepgram_tts.py` 99 %, `deepgram_stt.py` 93 %. Not exercised: binary, unparseable, non-object and malformed `Results` messages; `send_audio` after `finish`; KeepAlive racing a close |
+| Ruff, ruff format, mypy `--strict` (149 files), SPDX headers | clean |
+| `python3 scripts/compliance.py check` | exit 0: no violations, no unrecorded dependency changes, no stale files |
+
+Observed while gating, not caused by this work (no booking code changed):
+`tests/integration/test_booking_concurrency.py::test_twenty_concurrent_reservations_for_one_slot_book_exactly_once[overlapping_starts]`
+failed intermittently: 19 of the 20 parties ended with an unexpected error, the first reported
+being `DBAPIError … deadlock detected` (2 of 10 isolated runs; the failing runs took about 20 s
+instead of 3 s). The commits above were made after
+a full gate passed. A PostgreSQL deadlock is not mapped to `BookingSlotTakenError` or retried; this
+belongs to the booking engine.
+
+**Blocked:** live verification against Deepgram (both adapters). Put `DEEPGRAM_API_KEY`,
+`STT_MODEL` and `TTS_MODEL` in your local `.env`, set `VOICE_PROVIDER_MODE=live`, run a scenario,
+and record the run in `docs/providers.md`, including the close code Deepgram sends after
+`CloseStream`. The voice session that drives these adapters end to end is built separately.

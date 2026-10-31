@@ -19,8 +19,9 @@ dependencies = [
     "structlog>=26.1",
     "pyjwt>=2.10,<3",
     "google-genai>=2.30,<3",
-    # Deepgram live speech-to-text over WebSocket (Milestone 5).
+    # Deepgram speech (Milestone 5): live STT over WebSocket, TTS over streaming HTTP.
     "websockets>=15.0",
+    "httpx>=0.28,<1",
 ]
 
 [dependency-groups]
@@ -28,7 +29,6 @@ dev = [
     "pytest>=9.2",
     "pytest-asyncio>=1.4",
     "pytest-cov>=6",
-    "httpx>=0.28",
     "ruff>=0.17",
     "mypy>=2.4",
 ]

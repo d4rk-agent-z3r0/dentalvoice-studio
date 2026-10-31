@@ -8,6 +8,7 @@ from app.core.config import ProviderMode, Settings
 from app.integrations.llm.factory import ProviderConfigurationError
 from app.integrations.speech.base import SpeechToTextProvider, TextToSpeechProvider
 from app.integrations.speech.deepgram_stt import DeepgramSpeechToTextProvider
+from app.integrations.speech.deepgram_tts import DeepgramTextToSpeechProvider
 from app.integrations.speech.mock import MockSpeechToTextProvider, MockTextToSpeechProvider
 from app.voice.clips import ClipLibrary
 
@@ -49,7 +50,12 @@ def _deepgram_stt(settings: Settings) -> DeepgramSpeechToTextProvider:
     )
 
 
-def _deepgram_tts(settings: Settings) -> TextToSpeechProvider:
-    raise ProviderConfigurationError(
-        "Live Deepgram text-to-speech is not wired yet (Milestone 5, in progress)."
+def _deepgram_tts(settings: Settings) -> DeepgramTextToSpeechProvider:
+    key, model = settings.deepgram_api_key, settings.tts_model
+    if key is None or model is None:  # checked above; repeated so the types are narrowed
+        raise ProviderConfigurationError("DEEPGRAM_API_KEY and TTS_MODEL are required.")
+    return DeepgramTextToSpeechProvider(
+        api_key=key.get_secret_value(),
+        model=model,
+        timeout_seconds=settings.speech_timeout_seconds,
     )
