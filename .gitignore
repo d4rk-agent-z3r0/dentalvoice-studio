@@ -32,3 +32,8 @@ test-results/
 .idea/
 .vscode/
 license-report.md
+
+# Locally generated (e.g. Deepgram) caller audio: never committed
+backend/demo_data/audio/local/
+# Agent worktrees
+.claude/worktrees/

@@ -4,8 +4,9 @@
 
 | Rule | Practice |
 |---|---|
-| Working branch | `feat/dentalvoice-studio` (created before the first commit) |
-| Remote | None until explicitly approved; no pushes otherwise |
+| Branches | Milestones 1–2 and licensing: `feat/dentalvoice-studio`. From Milestone 3: one branch per milestone (`feat/m3-conversation-engine`, …) |
+| Remote | `github.com/d4rk-agent-z3r0/dentalvoice-studio` (owner-approved push, 2026-10-30) |
+| Integration | Pull request into protected `main`: 4 required checks, linear history, **Rebase and merge** keeps every feature commit. Merging is done by the owner |
 | Commits | Conventional Commits `<type>(<scope>): <description>`; one logically complete, verified feature per commit |
 | Pre-commit | Never bypassed (`--no-verify` is forbidden); no amends or history rewrites without instruction |
 | Gate before each commit | relevant tests → lint → typecheck → `git diff --staged` review → secret scan → stage named paths only → `git log -1` |
@@ -19,6 +20,7 @@ or merged only when the real change set justifies it, and any deviation is noted
 | # | Milestone | Acceptance evidence |
 |---|---|---|
 | 1 | Foundation: monorepo, backend + frontend scaffolding, health checks, Compose, CI | `docker compose up` → `/health/ready` 200 with DB; frontend page served; lint/type/test green |
+| L | Licensing and ownership (added by the revised spec, between 1 and 2) | MIT licence approved; SPDX headers; SBOMs; licence CI gate |
 | 2 | Domain & persistence: models, migrations, seed of 2 clinics + 5 scenarios, clinic-scoped repositories | Migration up/down test; CRUD via services; cross-clinic test fails closed |
 | 3 | Conversation engine: state machine, orchestrator, intake extraction, mock receptionist | Full onboarding completes in mock mode via the text-turn API, all 5 scenarios |
 | 4 | Gemini: adapter, versioned prompt, structured output, retry/timeout, token + latency capture | Contract tests green; live run recorded **only if** a key is provided |

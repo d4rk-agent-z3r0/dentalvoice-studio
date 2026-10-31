@@ -1,0 +1,52 @@
+{
+  "type": "Results",
+  "channel_index": [
+    0,
+    1
+  ],
+  "duration": 1.5,
+  "start": 0.0,
+  "is_final": true,
+  "speech_final": true,
+  "from_finalize": false,
+  "channel": {
+    "alternatives": [
+      {
+        "transcript": "Yes, that's correct.",
+        "confidence": 0.99,
+        "words": [
+          {
+            "word": "yes",
+            "start": 0.1,
+            "end": 0.4,
+            "confidence": 0.99,
+            "punctuated_word": "Yes,"
+          },
+          {
+            "word": "that's",
+            "start": 0.5,
+            "end": 0.8,
+            "confidence": 0.99,
+            "punctuated_word": "that's"
+          },
+          {
+            "word": "correct",
+            "start": 0.8,
+            "end": 1.3,
+            "confidence": 0.99,
+            "punctuated_word": "correct."
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "model_info": {
+      "name": "stt-test-model",
+      "version": "test",
+      "arch": "test"
+    },
+    "model_uuid": "00000000-0000-4000-8000-0000000000aa"
+  }
+}

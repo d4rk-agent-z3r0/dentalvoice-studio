@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PostgresDsn
+from pydantic import Field, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repository-root .env (backend/app/core/config.py -> repo root). Absent inside containers, where
@@ -39,6 +39,54 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     db_pool_size: int = Field(default=5, ge=1, le=50)
     db_connect_timeout_seconds: float = Field(default=3.0, gt=0)
+    # HS256 signing key for access tokens. No default: tokens cannot be issued or verified without
+    # it, and a weak key is rejected at startup.
+    jwt_secret: SecretStr | None = None
+    jwt_ttl_minutes: int = Field(default=60, ge=1, le=24 * 60)
+    booking_horizon_days: int = Field(default=60, ge=1, le=365)
+    # Live conversation model (VOICE_PROVIDER_MODE=live). Model ids change over time, so there is
+    # no default: the operator names the model explicitly (see docs/providers.md).
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{2,63}$")
+    llm_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    llm_max_attempts: int = Field(default=3, ge=1, le=5)
+    # Live speech (VOICE_PROVIDER_MODE=live): Deepgram. No default model ids
+    # (see docs/providers.md).
+    deepgram_api_key: SecretStr | None = None
+    stt_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
+    tts_model: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9.\-]{1,63}$")
+    speech_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    # 1.0 streams caller fixtures to STT in real time (a live call); 0 streams as fast as possible
+    # (tests). Latency figures are only meaningful at 1.0.
+    voice_realtime_factor: float = Field(default=1.0, ge=0, le=4)
+
+    @field_validator(
+        "jwt_secret",
+        "gemini_api_key",
+        "gemini_model",
+        "deepgram_api_key",
+        "stt_model",
+        "tts_model",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """``KEY=`` in .env (as in .env.example) means "not set", not an empty value."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _strong_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 characters.")
+        return value
+
+    @property
+    def text_turns_enabled(self) -> bool:
+        """The typed-turn endpoint exists for development and tests only."""
+        return self.environment is not Environment.PRODUCTION
 
 
 @lru_cache(maxsize=1)

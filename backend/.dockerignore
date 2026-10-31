@@ -8,3 +8,4 @@ htmlcov
 tests
 .env
 .env.*
+demo_data/audio/local

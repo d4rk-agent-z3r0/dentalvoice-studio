@@ -21,6 +21,10 @@ RUN useradd --system --uid 10001 --no-create-home app
 WORKDIR /app
 COPY --from=build --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app app ./app
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app migrations ./migrations
+# Committed synthetic caller fixtures only; locally generated audio is excluded (.dockerignore).
+COPY --chown=app:app demo_data/audio/fixtures ./demo_data/audio/fixtures
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

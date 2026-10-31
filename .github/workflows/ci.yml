@@ -98,6 +98,7 @@ jobs:
       - name: Validate compose file
         env:
           POSTGRES_PASSWORD: compose-config-validation-only
+          JWT_SECRET: compose-config-validation-only-not-a-real-key
         run: docker compose config --quiet
       - run: docker build -t dentalvoice-backend ./backend
       - run: docker build -t dentalvoice-frontend ./frontend

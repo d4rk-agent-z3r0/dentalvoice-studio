@@ -28,7 +28,8 @@ Next.js 16 differs from older versions: consult `frontend/node_modules/next/dist
 an unfamiliar API (see `frontend/AGENTS.md`).
 
 ## Git workflow
-- Branch `feat/dentalvoice-studio`; no pushes without explicit approval.
+- One branch per milestone (`feat/m<N>-<name>`), merged into protected `main` by pull request
+  (owner merges, Rebase and merge). Push only with the owner's approval.
 - Conventional Commits `<type>(<scope>): <description>`; one verified feature per commit.
 - Before committing: relevant tests → lint → typecheck → review `git diff --staged` → stage named paths only.
 - Never `--no-verify`, never amend or rewrite history unless asked, never weaken tests to pass.

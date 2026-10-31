@@ -13869,12 +13869,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 3,
-            "location": "vitest.setup.ts"
-          }
         ]
       },
       "externalReferences": [
@@ -13922,10 +13916,6 @@
       ],
       "name": "jest-dom",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "@testing-library/jest-dom/vitest"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -13997,16 +13987,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 4,
-            "location": "vitest.setup.ts"
-          },
-          {
-            "line": 8,
-            "location": "vitest.setup.ts"
-          }
         ]
       },
       "externalReferences": [
@@ -14054,10 +14034,6 @@
       ],
       "name": "react",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "@testing-library/react,cleanup,@testing-library/react/cleanup"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -15088,7 +15064,7 @@
         }
       ],
       "purl": "pkg:npm/%40types/react@19.3.0",
-      "scope": "excluded",
+      "scope": "required",
       "type": "library",
       "version": "19.3.0"
     },
@@ -18503,16 +18479,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 3,
-            "location": "vitest.config.mts"
-          },
-          {
-            "line": 8,
-            "location": "vitest.config.mts"
-          }
         ]
       },
       "externalReferences": [
@@ -18560,10 +18526,6 @@
       ],
       "name": "plugin-react",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "@vitejs/plugin-react"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -27496,16 +27458,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 2,
-            "location": "eslint.config.mjs"
-          },
-          {
-            "line": 3,
-            "location": "eslint.config.mjs"
-          }
         ]
       },
       "externalReferences": [
@@ -27553,10 +27505,6 @@
       ],
       "name": "eslint-config-next",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "eslint-config-next/core-web-vitals,eslint-config-next/typescript"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -28766,20 +28714,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 1,
-            "location": "eslint.config.mjs"
-          },
-          {
-            "line": 5,
-            "location": "eslint.config.mjs"
-          },
-          {
-            "line": 9,
-            "location": "eslint.config.mjs"
-          }
         ]
       },
       "externalReferences": [
@@ -28827,10 +28761,6 @@
       ],
       "name": "eslint",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "eslint/config,defineConfig,eslint/config/defineConfig,globalIgnores,eslint/config/globalIgnores"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
@@ -44302,12 +44232,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 3,
-            "location": "src/app/layout.tsx"
-          }
         ]
       },
       "externalReferences": [
@@ -44356,10 +44280,6 @@
       "name": "next",
       "properties": [
         {
-          "name": "ImportedModules",
-          "value": "next,Metadata,next/Metadata"
-        },
-        {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
         },
@@ -44384,10 +44304,6 @@
           "value": "true"
         },
         {
-          "name": "cdx:npm:package:type-only",
-          "value": "true"
-        },
-        {
           "name": "cdx:npm:provenanceUrl",
           "value": "https://registry.npmjs.org/-/npm/v1/attestations/next@16.4.3"
         },
@@ -44401,7 +44317,7 @@
         }
       ],
       "purl": "pkg:npm/next@16.4.3",
-      "scope": "excluded",
+      "scope": "required",
       "tags": [
         "framework"
       ],
@@ -48149,7 +48065,7 @@
         }
       ],
       "purl": "pkg:npm/react@19.3.0",
-      "scope": "optional",
+      "scope": "required",
       "tags": [
         "framework"
       ],
@@ -55898,24 +55814,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 5,
-            "location": "vitest.config.mts"
-          },
-          {
-            "line": 5,
-            "location": "vitest.setup.ts"
-          },
-          {
-            "line": 7,
-            "location": "vitest.config.mts"
-          },
-          {
-            "line": 7,
-            "location": "vitest.setup.ts"
-          }
         ]
       },
       "externalReferences": [
@@ -55963,10 +55861,6 @@
       ],
       "name": "vitest",
       "properties": [
-        {
-          "name": "ImportedModules",
-          "value": "vitest,afterEach,vitest/afterEach,vitest/config,defineConfig,vitest/config/defineConfig"
-        },
         {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"

@@ -1,0 +1,6 @@
+{
+  "type": "Error",
+  "variant": "SchemaError",
+  "description": "Unknown field in message.",
+  "message": "Unknown field in message."
+}

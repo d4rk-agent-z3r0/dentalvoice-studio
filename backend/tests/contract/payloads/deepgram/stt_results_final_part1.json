@@ -1,0 +1,73 @@
+{
+  "type": "Results",
+  "channel_index": [
+    0,
+    1
+  ],
+  "duration": 1.6,
+  "start": 0.0,
+  "is_final": true,
+  "speech_final": false,
+  "from_finalize": false,
+  "channel": {
+    "alternatives": [
+      {
+        "transcript": "I'd like to book a cleaning,",
+        "confidence": 0.97,
+        "words": [
+          {
+            "word": "i'd",
+            "start": 0.12,
+            "end": 0.3,
+            "confidence": 0.98,
+            "punctuated_word": "I'd"
+          },
+          {
+            "word": "like",
+            "start": 0.3,
+            "end": 0.5,
+            "confidence": 0.97,
+            "punctuated_word": "like"
+          },
+          {
+            "word": "to",
+            "start": 0.5,
+            "end": 0.6,
+            "confidence": 0.97,
+            "punctuated_word": "to"
+          },
+          {
+            "word": "book",
+            "start": 0.6,
+            "end": 0.9,
+            "confidence": 0.96,
+            "punctuated_word": "book"
+          },
+          {
+            "word": "a",
+            "start": 0.9,
+            "end": 1.0,
+            "confidence": 0.95,
+            "punctuated_word": "a"
+          },
+          {
+            "word": "cleaning",
+            "start": 1.0,
+            "end": 1.5,
+            "confidence": 0.97,
+            "punctuated_word": "cleaning,"
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "model_info": {
+      "name": "stt-test-model",
+      "version": "test",
+      "arch": "test"
+    },
+    "model_uuid": "00000000-0000-4000-8000-0000000000aa"
+  }
+}

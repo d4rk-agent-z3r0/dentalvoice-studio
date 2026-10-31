@@ -60,15 +60,36 @@
       "declared": "BSD License",
       "concluded": "BSD-3-Clause",
       "evidence": "Windows-only transitive dependency, not installed on Linux. colorama-0.4.6 wheel LICENSE.txt is the BSD 3-clause text (Jonathan Hartley); checked 2026-10-30."
+    },
+    {
+      "ecosystem": "python",
+      "name": "pyasn1_modules",
+      "declared": "BSD License",
+      "concluded": "BSD-2-Clause",
+      "evidence": "Bundled pyasn1_modules-0.4.2.dist-info/licenses/LICENSE.txt has the two redistribution conditions and no non-endorsement clause: BSD 2-clause (Ilya Etingof); checked 2026-10-31."
+    },
+    {
+      "ecosystem": "python",
+      "name": "sniffio",
+      "declared": "Apache Software License; MIT License",
+      "concluded": "MIT OR Apache-2.0",
+      "evidence": "sniffio-1.3.1 ships LICENSE ('either of the licenses found in LICENSE.APACHE2 or LICENSE.MIT'), LICENSE.MIT and LICENSE.APACHE2; metadata 'MIT OR Apache-2.0'; checked 2026-10-31."
     }
   ],
   "reviewed": [
     {
       "ecosystem": "python",
-      "names": ["certifi", "pathspec"],
+      "names": ["certifi"],
       "license": "MPL-2.0",
       "decision": "accepted",
-      "rationale": "Development-only (pulled in by httpx test client and mypy); unmodified; not in the runtime image."
+      "rationale": "Runtime since Milestone 4 (Mozilla CA bundle used by requests/httpx inside the Gemini client) and development. Shipped unmodified; MPL-2.0 is file-level copyleft, so the obligations are to keep the files unmodified with their licence notice (listed in THIRD_PARTY_NOTICES.md) and point to the public source. Reviewed 2026-10-31."
+    },
+    {
+      "ecosystem": "python",
+      "names": ["pathspec"],
+      "license": "MPL-2.0",
+      "decision": "accepted",
+      "rationale": "Development-only (pulled in by mypy); unmodified; not in the runtime image."
     },
     {
       "ecosystem": "npm",
