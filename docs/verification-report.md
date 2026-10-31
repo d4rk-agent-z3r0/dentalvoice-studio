@@ -413,6 +413,9 @@ instead of 3 s). The commits above were made after
 a full gate passed. A PostgreSQL deadlock is not mapped to `BookingSlotTakenError` or retried; this
 belongs to the booking engine.
 
+**Resolved** in `fix(booking): retry transactions PostgreSQL aborts on deadlock`; see "Milestone 5–7
+integration" below.
+
 **Blocked:** live verification against Deepgram (both adapters). Put `DEEPGRAM_API_KEY`,
 `STT_MODEL` and `TTS_MODEL` in your local `.env`, set `VOICE_PROVIDER_MODE=live`, run a scenario,
 and record the run in `docs/providers.md`, including the close code Deepgram sends after
@@ -535,6 +538,9 @@ another session) and passed on rerun; neither involves code changed here:
 | `test_booking_concurrency.py` 20-way race (`overlapping_starts`), and once the concurrent-replays test | 3 of 4 full runs; in the inspected failure the losers got `DBAPIError: deadlock detected` instead of `BOOKING_SLOT_TAKEN`; the file alone passed 5 of 5 | Concurrent inserts checked by one exclusion constraint can wait on each other and deadlock (PostgreSQL aborts one). `ReservationService` maps only the exclusion violation, so a deadlock would reach the client as a 500. Needs a booking-engine fix (map or retry `40P01`); not changed in this milestone |
 | `test_intake_service.py::test_events_never_contain_field_values` | 1 of 4 full runs | Asserts `"212"` is absent from the event payloads' `repr`, which also contains random UUIDs; a UUID containing `212` fails it |
 
+**Both resolved** after integration: the deadlock by `fix(booking)`, the UUID coincidence by
+`test(intake)`. See "Milestone 5–7 integration" below.
+
 ### `feat(analytics): add clinic performance dashboard`
 
 | Check | Command | Result |
@@ -576,3 +582,27 @@ production-build analytics run).
 Not verified here: the Docker image build with the new pages; screen-reader behaviour beyond the
 roles and labels the unit tests assert; latency figures with real speech timings, which need
 Milestone 5.
+
+## Milestone 5–7 integration
+
+Run 2026-10-31. The Deepgram adapters, the voice simulator and the patients, appointments and analytics
+work were built in parallel on separate branches. They were then applied in that order on top of
+the Milestone 5 voice branch. Every conflict was additive (router imports, API client methods,
+report sections) and was resolved by keeping both sides. The API client's `send` helper now takes
+the voice work's `Accept` parameter as well as the appointments work's extra headers
+(`Idempotency-Key`).
+
+| Commit | Check | Result |
+|---|---|---|
+| `fix(booking)` | Reproduce: the 20-way race file run alone, 10 times; then 10 times under CPU load | 20 of 20 passed. The natural deadlock window is too narrow to hit on demand |
+| | New tests provoke a real `40P01` inside the booking transaction (advisory locks taken in opposite orders); run before the fix | 3 failed with `DBAPIError … deadlock detected` |
+| | After the fix: both bookings succeed after one retry; an overlapping loser gets `BOOKING_SLOT_TAKEN` on its retry; a deadlocked reschedule is retried; with retries disabled the victim gets `CONCURRENT_UPDATE` | passed |
+| | Mutation: retry removed from `reserve` | the 2 reserve deadlock tests failed; code restored |
+| | Found while testing: one run took 46 s and failed. The race test's 20-party barrier also held retried transactions, which waited for parties that never came | harness now holds only each party's first attempt |
+| | Two copies of the booking suite at once on separate databases, 8 rounds | 16 of 16 passed |
+| | Unit: only `40P01`/`40001` retried; exclusion, unique and other errors propagate unchanged; bounded; pauses jittered | passed |
+| `fix(voice)` shutdown | The real lifespan in live mode (no network): the Deepgram TTS HTTP client is closed after shutdown | passed; removing the call fails the test |
+| `test(intake)` | UUIDs stripped before the leak check; every fragment of the phone value and the email local part checked; mutation: value put into the rejection event | stable 3 of 3; the mutant failed |
+| `fix(legal)` | `make verify` failed only because `frontend.cdx.json` was stale: cdxgen's `ImportedModules` lists the names our code imports from React and Next. The normaliser now drops that property (test added); regenerated | `make license-check` exit 0; the SBOM diff removes only those 8 properties |
+
+| Integrated branch | `make verify` (PostgreSQL 16) | exit 0: backend 524 unit/contract + 158 integration, 22 tooling, 160 frontend (15 files); Ruff, mypy `--strict` (169 files), ESLint, `tsc`, licence gate all clean |
