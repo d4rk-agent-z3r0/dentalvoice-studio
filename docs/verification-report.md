@@ -188,3 +188,44 @@ orchestrator (the baseline lists orchestrator first) because the orchestrator de
 | Backend integration | 61 passed |
 | Coverage | 94 % of 2,305 statements (state machine 100 %, decision 97 %, intake 95–100 %, orchestrator 85 %) |
 | Ruff, ruff format, mypy `--strict` (103 files) | clean |
+
+## Milestone 4 — Gemini integration
+
+Run 2026-10-31. **No live Gemini call has been made**: no API key exists in the build environment.
+Everything below runs the real `google-genai` 2.34.0 SDK with the network replaced by an
+`httpx.MockTransport`. The payloads were written by hand in Gemini's documented `generateContent`
+response format and parse with the SDK's own response types; they are not recordings of live
+traffic (`backend/tests/contract/payloads/gemini/README.md`).
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(ai)` integrate | Request: `POST …/models/{model}:generateContent`; key in `x-goog-api-key` header and not the URL; `systemInstruction` carries `receptionist-v1`; `responseMimeType: application/json` with the inlined `TurnProposal` schema; no `tools` or `toolConfig`; a caller trying to close the fence cannot | passed |
+| | Well-formed reply becomes a validated `TurnProposal` with reported token usage | passed |
+| | Schema is self-contained (no `$ref`/`$defs`) and closed (`additionalProperties: false`) | passed |
+| | Live mode without `GEMINI_API_KEY` or `GEMINI_MODEL` refuses to start (factory and `create_app`); with both, the provider is built without network | passed |
+| | Migration `e9bff6a540d7` (token usage columns): upgrade, `alembic check`, downgrade one, upgrade | clean |
+| | Licence gate: 596 packages; `pyasn1_modules` and `sniffio` were flagged unknown by the gate, then resolved from their bundled licence files; `certifi` (MPL-2.0) became runtime and its review was corrected | 0 violations |
+| `feat(ai)` retry | 503, 500, 429, connection error and read timeout each retried once then succeeded | passed |
+| | Persistent 503 ×3 → `PROVIDER_UNAVAILABLE`; 3 requests; 2 backoff waits (0.5–0.75 s, then 1.0–1.5 s) | passed |
+| | 400 and 403 not retried → `PROVIDER_ERROR` | passed |
+| | A provider stalling past the timeout is cut off and retried | passed |
+| | Schema-invalid output re-asked once; the re-ask names the field locations, never the offending value; usage summed over both calls | passed |
+| | Invalid twice → error, even with a larger attempt budget (one re-ask only) | passed |
+| `test(ai)` | Through the orchestrator and PostgreSQL: Gemini's reply is spoken and tokens and attempts are stored on the turn | passed |
+| | Model returns `CONFIRM` plus "your appointment is booked and confirmed" during collection → action ignored, event recorded, the claim is not spoken | passed |
+| | Model proposes `ava@gmail.com` → rejected by intake validation; the model's reply that repeated it is replaced | passed |
+| | Model escalates with clinical advice in its text → the fixed safety message is spoken instead | passed |
+| | Outage through the HTTP API → `503 PROVIDER_UNAVAILABLE` naming the provider, no upstream details in the body; state, intake unchanged; `provider_error` event | passed |
+
+| Suite | Result |
+|---|---|
+| Backend unit + contract | 375 passed |
+| Backend integration | 66 passed |
+| Coverage | 94 % of 2,494 statements (`gemini.py` 93 %, `prompting.py` 96 %) |
+
+**Known gap, scheduled for Milestone 8 (`security(ai)`):** when the model's action *is* accepted,
+its reply text is spoken as written. An output filter for claims the application has not made
+("confirmed", "booked") and for prompt disclosure is part of the Milestone 8 output restrictions.
+
+**Blocked:** live verification against Gemini. Put `GEMINI_API_KEY` and `GEMINI_MODEL` in your local
+`.env`, set `VOICE_PROVIDER_MODE=live`, and record the run in `docs/providers.md`.

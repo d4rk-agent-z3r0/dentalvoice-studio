@@ -5,6 +5,7 @@
 The adapter and ``google-genai`` run unmodified; only the network is replaced.
 """
 
+import asyncio
 import json
 from collections import deque
 from datetime import date
@@ -25,25 +26,55 @@ def payload(name: str) -> dict[str, Any]:
     return data
 
 
+Scripted = tuple[int, str | dict[str, Any]] | Exception | float
+
+
+def proposal_response(
+    proposal: dict[str, Any], usage: tuple[int, int] = (700, 60)
+) -> dict[str, Any]:
+    """A documented-shape ``generateContent`` response whose text is ``proposal`` as JSON."""
+    return {
+        "candidates": [
+            {
+                "content": {"parts": [{"text": json.dumps(proposal)}], "role": "model"},
+                "finishReason": "STOP",
+                "index": 0,
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": usage[0],
+            "candidatesTokenCount": usage[1],
+            "totalTokenCount": sum(usage),
+        },
+        "modelVersion": "gemini-test-model",
+    }
+
+
 class FakeGemini:
-    def __init__(self, *responses: tuple[int, str] | Exception) -> None:
-        """Each response is ``(status, payload file)`` or an exception raised by the transport."""
-        self._queue: deque[tuple[int, str] | Exception] = deque(responses)
+    def __init__(self, *responses: Scripted) -> None:
+        """Each item: ``(status, payload file name or dict)``, an exception raised by the
+        transport, or a float: seconds to stall before answering with the next item."""
+        self._queue: deque[Scripted] = deque(responses)
         self.requests: list[dict[str, Any]] = []
         self.urls: list[str] = []
         self.headers: list[dict[str, str]] = []
 
-    def _handle(self, request: httpx.Request) -> httpx.Response:
+    async def _handle(self, request: httpx.Request) -> httpx.Response:
         self.urls.append(str(request.url))
         self.headers.append(dict(request.headers))
         self.requests.append(json.loads(request.content))
         if not self._queue:
             raise AssertionError("FakeGemini received more requests than scripted")
         item = self._queue.popleft()
+        if isinstance(item, float):
+            await asyncio.sleep(item)
+            item = self._queue.popleft()
         if isinstance(item, Exception):
             raise item
-        status, name = item
-        return httpx.Response(status, json=payload(name))
+        if isinstance(item, float):
+            raise AssertionError("two stalls in a row")
+        status, body = item
+        return httpx.Response(status, json=payload(body) if isinstance(body, str) else body)
 
     def provider(self, **overrides: Any) -> GeminiConversationProvider:
         options: dict[str, Any] = {
