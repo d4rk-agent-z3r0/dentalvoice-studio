@@ -208,11 +208,58 @@ appointment is `404`.
 `starts_at`; `status` is one of `requested`, `confirmed`, `cancelled`, `rescheduled`; `limit` 1–200
 (default 100). Ordered by `starts_at`.
 
-## Patients, analytics — M7
+## Patients — shipped in M7
+
+Read only. Patients are created or matched by the conversation engine when a call completes with a
+confirmed intake; there is no create or update endpoint.
+
+| Method | Path | Role | Success |
+|---|---|---|---|
+| GET | `/api/v1/patients?q=&status=&limit=&offset=` | any | `200` list of `PatientRead` |
+| GET | `/api/v1/patients/{id}` | any | `200` `PatientDetail`; another clinic's or unknown id `404 NOT_FOUND` (`Patient not found.`) |
+
+List parameters: `q` (≤ 254 characters, trimmed; blank means no search) matches first name, last
+name, the full name ("Ava Lindqvist") or email, case-insensitively, with `%`, `_` and `\` taken
+literally (phone numbers are not a search key); `status` is one of `prospective`, `registered`,
+`archived`; `limit` 1–100 (default 50); `offset` 0–10000. Ordered by last name, first name, then
+id, so pages are stable.
+
+**PatientRead:**
+
+```json
+{ "id": "…", "first_name": "Ava", "last_name": "Lindqvist", "email": "ava.lindqvist@example.com",
+  "phone": "+1-555-0101", "preferred_contact_channel": "email", "patient_type": "new",
+  "status": "registered", "created_at": "…", "updated_at": "…" }
+```
+
+**PatientDetail:**
+
+```json
+{
+  "patient": { "…": "PatientRead" },
+  "conversations": [
+    { "id": "…", "scenario_id": "…", "state": "COMPLETED", "provider_mode": "mock", "turn_count": 17,
+      "started_at": "…", "ended_at": "…", "created_at": "…",
+      "snapshot_confirmed_at": "2026-10-31T12:03:10Z" }
+  ],
+  "appointments": [ { "…": "Appointment, as in the booking API" } ],
+  "latest_snapshot": {
+    "conversation_id": "…", "confirmed_at": "…", "patient_type": "new",
+    "preferred_contact_channel": "email", "visit_reason": "Routine cleaning",
+    "requested_service": "hygiene_cleaning", "preferred_date": "2026-11-03", "preferred_time": "10:00:00"
+  }
+}
+```
+
+`conversations` are the calls linked to the patient (`conversations.patient_id`), newest first;
+`snapshot_confirmed_at` is set when that call produced a confirmed intake snapshot. `appointments`
+are in every status, latest start first. Each list holds at most 100 rows. `latest_snapshot` is the
+most recently confirmed snapshot among the linked calls, without its contact values (those are on
+`patient`), or `null`.
+
+## Analytics — M7
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/v1/patients?q=&status=` | Search + filter |
-| GET | `/api/v1/patients/{id}` | Profile, snapshots, conversations, appointments |
 | GET | `/api/v1/analytics/summary` | Counts, completion rate, avg duration from persisted data |
 | GET | `/api/v1/analytics/latency` | p50/p95 of measured stage timings |

@@ -62,8 +62,11 @@ class PatientRepository:
             pattern = f"%{_escape_like(query.strip())}%"
             stmt = stmt.where(
                 or_(
-                    Patient.first_name.ilike(pattern, escape="\\"),
-                    Patient.last_name.ilike(pattern, escape="\\"),
+                    # Matches either name part and the full name ("Ava Lindqvist"), which is stored
+                    # in two columns.
+                    func.concat(Patient.first_name, " ", Patient.last_name).ilike(
+                        pattern, escape="\\"
+                    ),
                     Patient.email.ilike(pattern, escape="\\"),
                 )
             )

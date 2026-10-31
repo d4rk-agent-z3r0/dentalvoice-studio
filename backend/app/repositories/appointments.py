@@ -57,6 +57,18 @@ class AppointmentRepository:
         )
         return (await self._session.scalars(stmt)).all()
 
+    async def list_for_patient(
+        self, clinic_id: uuid.UUID, patient_id: uuid.UUID, *, limit: int = 100
+    ) -> Sequence[Appointment]:
+        """A patient's appointments in every status, latest start first."""
+        stmt = (
+            select(Appointment)
+            .where(Appointment.clinic_id == clinic_id, Appointment.patient_id == patient_id)
+            .order_by(Appointment.starts_at.desc(), Appointment.id.desc())
+            .limit(limit)
+        )
+        return (await self._session.scalars(stmt)).all()
+
     async def list(
         self,
         clinic_id: uuid.UUID,

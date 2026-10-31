@@ -171,3 +171,101 @@ export interface ListConversationsParams {
   /** 1–100; the backend default is 50. */
   limit?: number;
 }
+
+export const PATIENT_STATUSES = ["prospective", "registered", "archived"] as const;
+export type PatientStatus = (typeof PATIENT_STATUSES)[number];
+
+export function isPatientStatus(value: string): value is PatientStatus {
+  return (PATIENT_STATUSES as readonly string[]).includes(value);
+}
+
+/** `PatientRead`. */
+export interface Patient {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  preferred_contact_channel: ContactChannel | null;
+  patient_type: PatientType;
+  status: PatientStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListPatientsParams {
+  /** Case-insensitive match on first, last or full name, or email. */
+  q?: string;
+  status?: PatientStatus;
+  /** 1–100; the backend default is 50. */
+  limit?: number;
+  offset?: number;
+}
+
+/** `PatientConversationRead`: a conversation linked to the patient. */
+export interface PatientConversation {
+  id: string;
+  scenario_id: string;
+  state: ConversationState;
+  provider_mode: ProviderMode;
+  turn_count: number;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  /** Set when the call ended with a confirmed intake snapshot. */
+  snapshot_confirmed_at: string | null;
+}
+
+/** `PatientSnapshotSummary`: what the latest confirmed intake recorded about the visit. */
+export interface PatientSnapshotSummary {
+  conversation_id: string;
+  confirmed_at: string;
+  patient_type: PatientType;
+  preferred_contact_channel: ContactChannel;
+  visit_reason: string;
+  requested_service: string;
+  /** `YYYY-MM-DD` in the clinic's calendar. */
+  preferred_date: string;
+  /** `HH:MM:SS` clinic-local time. */
+  preferred_time: string;
+}
+
+export const APPOINTMENT_STATUSES = ["requested", "confirmed", "cancelled", "rescheduled"] as const;
+export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
+
+export const ACTIVE_APPOINTMENT_STATUSES: ReadonlySet<AppointmentStatus> = new Set<AppointmentStatus>(
+  ["requested", "confirmed"],
+);
+
+export function isAppointmentStatus(value: string): value is AppointmentStatus {
+  return (APPOINTMENT_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * `AppointmentRead`. `starts_at`/`ends_at` are UTC instants; the `*_local` strings are the same
+ * instants in the clinic's timezone with their offset (e.g. `2030-01-07T09:00:00+00:00`).
+ */
+export interface Appointment {
+  id: string;
+  patient_id: string;
+  dentist_id: string;
+  appointment_type_id: string;
+  conversation_id: string | null;
+  rescheduled_from_id: string | null;
+  status: AppointmentStatus;
+  starts_at: string;
+  ends_at: string;
+  starts_at_local: string;
+  ends_at_local: string;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** `PatientDetail`. */
+export interface PatientDetail {
+  patient: Patient;
+  conversations: PatientConversation[];
+  appointments: Appointment[];
+  latest_snapshot: PatientSnapshotSummary | null;
+}

@@ -18,8 +18,8 @@ const SECTIONS = [
   {
     href: "/patients",
     title: "Patients",
-    body: "Patient records created from completed onboarding calls.",
-    available: false,
+    body: "Search patient records created from completed onboarding calls; open a profile for contact details, linked calls, confirmed intake and appointments.",
+    available: true,
   },
   {
     href: "/appointments",

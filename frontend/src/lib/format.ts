@@ -1,6 +1,68 @@
 // SPDX-FileCopyrightText: 2026 Siddharth Majhi
 // SPDX-License-Identifier: MIT
-import type { ConversationState, IntakeField, IntakeFieldStatus } from "@/lib/api/types";
+import type {
+  AppointmentStatus,
+  ContactChannel,
+  ConversationState,
+  IntakeField,
+  IntakeFieldStatus,
+  PatientStatus,
+  PatientType,
+} from "@/lib/api/types";
+
+export const PATIENT_STATUS_LABELS: Record<PatientStatus, string> = {
+  prospective: "Prospective",
+  registered: "Registered",
+  archived: "Archived",
+};
+
+export const PATIENT_TYPE_LABELS: Record<PatientType, string> = {
+  new: "New patient",
+  returning: "Returning patient",
+};
+
+export const CONTACT_CHANNEL_LABELS: Record<ContactChannel, string> = {
+  email: "Email",
+  phone: "Phone",
+};
+
+export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatus, string> = {
+  requested: "Requested",
+  confirmed: "Confirmed",
+  cancelled: "Cancelled",
+  rescheduled: "Rescheduled",
+};
+
+/** Unknown values (a newer backend) are shown as sent rather than hidden. */
+export function labelOf<K extends string>(labels: Record<K, string>, value: string): string {
+  return value in labels ? labels[value as K] : value;
+}
+
+export function fullName(person: { first_name: string; last_name: string }): string {
+  return `${person.first_name} ${person.last_name}`;
+}
+
+const LOCAL_ISO = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/;
+
+/**
+ * The clinic-local calendar day of an ISO string the server already rendered in the clinic's
+ * timezone (`2030-01-07T09:00:00+00:00` → `2030-01-07`). Read as written, never re-zoned.
+ */
+export function localDay(value: string): string {
+  return LOCAL_ISO.exec(value)?.[1] ?? value;
+}
+
+/** The clinic-local wall-clock time of such a string (`…T09:00:00+00:00` → `09:00`). */
+export function localClock(value: string): string {
+  const match = LOCAL_ISO.exec(value);
+  return match ? `${match[2]}:${match[3]}` : value;
+}
+
+/** `Mon 7 Jan 2030, 09:00` for a server-rendered clinic-local ISO string. */
+export function formatLocalDateTime(value: string): string {
+  const match = LOCAL_ISO.exec(value);
+  return match ? `${formatCalendarDate(match[1])}, ${match[2]}:${match[3]}` : value;
+}
 
 export const FIELD_LABELS: Record<IntakeField, string> = {
   first_name: "First name",

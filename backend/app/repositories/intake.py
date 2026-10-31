@@ -73,6 +73,17 @@ class IntakeRepository:
         )
         return await self._session.scalar(stmt)
 
+    async def snapshots_for_conversations(
+        self, clinic_id: uuid.UUID, conversation_ids: Iterable[uuid.UUID]
+    ) -> Sequence[IntakeSnapshot]:
+        ids = list(conversation_ids)
+        if not ids:
+            return []
+        stmt = select(IntakeSnapshot).where(
+            IntakeSnapshot.clinic_id == clinic_id, IntakeSnapshot.conversation_id.in_(ids)
+        )
+        return (await self._session.scalars(stmt)).all()
+
 
 class EventRepository:
     def __init__(self, session: AsyncSession) -> None:

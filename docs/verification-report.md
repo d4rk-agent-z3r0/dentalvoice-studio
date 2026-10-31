@@ -466,3 +466,22 @@ cells wrapped (`0` / `ms` on two lines).
 Not verified here: live providers (no Deepgram or Gemini keys; mock mode only), a production build
 served with `next start` against the backend, and screen-reader behaviour beyond the roles, labels
 and live regions the unit tests assert.
+
+## Milestone 7 — Patients, appointments, analytics
+
+Run 2026-10-31 on branch `feat/m7-dashboards` against PostgreSQL 16 (`dv-testdb` container, a
+dedicated `dv_test_booking` database) with Python 3.13 and Node 22.23.4 / pnpm 10.28.0. No
+migration and no dependency was added.
+
+### `feat(patients): build synthetic patient management`
+
+| Check | Command | Result |
+|---|---|---|
+| Patients API (`test_api_patients.py`) | `uv run pytest -m integration tests/integration/test_api_patients.py` | 6 passed: search on first, last and full name and email, case-insensitive, `%`/`_` literal, phone not searched; status filter; `limit`/`offset` pages join up; bad `limit`/`offset`/`status`/over-long `q` are `400`; profile lists only the patient's linked calls newest first with `snapshot_confirmed_at`, the newest snapshot as `latest_snapshot`, and booked + rescheduled appointments with clinic-local times; empty profile; another clinic's and unknown ids `404 Patient not found.`; a `clinic_id` query parameter is ignored; an empty clinic lists `[]`; no token `401` |
+| Mutation | `latest_snapshot` chose the oldest snapshot (`max` → `min`) | the profile test failed as intended; restored |
+| Backend unit | `uv run pytest -m "not integration"` | 452 passed |
+| Backend integration | `uv run pytest -m integration` | 120 passed (6 new) |
+| Ruff, ruff format, mypy `--strict` | `uv run ruff check . && uv run ruff format --check . && uv run mypy` | clean (134 files) |
+| Frontend unit | `pnpm test` | 63 passed in 8 files (10 new: patients list 5, patient profile 4, API client 1) |
+| ESLint, tsc | `pnpm lint && pnpm typecheck` | clean |
+| SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |

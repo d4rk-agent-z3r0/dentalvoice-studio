@@ -1,12 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Siddharth Majhi
 # SPDX-License-Identifier: MIT
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.domain.enums import ContactChannel, PatientStatus, PatientType
+from app.core.config import ProviderMode
+from app.domain.enums import ContactChannel, ConversationState, PatientStatus, PatientType
+from app.schemas.booking import AppointmentRead
 from app.schemas.common import PersonName, ReadModel, ReservedEmail, ReservedPhone, WriteModel
 
 
@@ -53,3 +55,45 @@ class PatientRead(ReadModel):
     status: PatientStatus
     created_at: datetime
     updated_at: datetime
+
+
+class PatientConversationRead(BaseModel):
+    """A conversation linked to the patient. ``snapshot_confirmed_at`` is set when the call ended
+    with a confirmed intake snapshot."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    scenario_id: uuid.UUID
+    state: ConversationState
+    provider_mode: ProviderMode
+    turn_count: int
+    started_at: datetime | None
+    ended_at: datetime | None
+    created_at: datetime
+    snapshot_confirmed_at: datetime | None
+
+
+class PatientSnapshotSummary(BaseModel):
+    """What the most recently confirmed intake recorded about the visit. Contact values are on
+    the patient record itself."""
+
+    model_config = ConfigDict(frozen=True)
+
+    conversation_id: uuid.UUID
+    confirmed_at: datetime
+    patient_type: PatientType
+    preferred_contact_channel: ContactChannel
+    visit_reason: str
+    requested_service: str
+    preferred_date: date
+    preferred_time: time
+
+
+class PatientDetail(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    patient: PatientRead
+    conversations: list[PatientConversationRead]
+    appointments: list[AppointmentRead]
+    latest_snapshot: PatientSnapshotSummary | None

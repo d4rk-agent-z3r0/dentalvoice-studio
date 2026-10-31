@@ -172,6 +172,27 @@ describe("createApiClient", () => {
     await client.getConversation("a/b");
     expect(api.requests[0].path).toBe("/api/v1/conversations/a%2Fb");
   });
+
+  it("builds patient queries, omitting blank search terms", async () => {
+    const api = fakeApi({
+      "GET /api/v1/patients": { status: 200, body: [] },
+      "GET /api/v1/patients/p%2F1": { status: 200, body: {} },
+    });
+    const client = createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl });
+
+    await client.listPatients();
+    await client.listPatients({ q: "  ", status: "archived", limit: 26, offset: 0 });
+    await client.listPatients({ q: " Ava Lind ", offset: 25 });
+    await client.getPatient("p/1");
+
+    expect(api.requests.map((r) => r.search)).toEqual([
+      "",
+      "?status=archived&limit=26&offset=0",
+      "?q=Ava+Lind&offset=25",
+      "",
+    ]);
+    expect(api.requests[3].path).toBe("/api/v1/patients/p%2F1");
+  });
 });
 
 describe("voice endpoints", () => {

@@ -48,6 +48,18 @@ class ConversationRepository:
         stmt = stmt.order_by(Conversation.created_at.desc(), Conversation.id.desc()).limit(limit)
         return (await self._session.scalars(stmt)).all()
 
+    async def list_for_patient(
+        self, clinic_id: uuid.UUID, patient_id: uuid.UUID, *, limit: int = 100
+    ) -> Sequence[Conversation]:
+        """Conversations linked to a patient (a completed call links one), newest first."""
+        stmt = (
+            select(Conversation)
+            .where(Conversation.clinic_id == clinic_id, Conversation.patient_id == patient_id)
+            .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+            .limit(limit)
+        )
+        return (await self._session.scalars(stmt)).all()
+
     async def compare_and_set_state(
         self,
         clinic_id: uuid.UUID,

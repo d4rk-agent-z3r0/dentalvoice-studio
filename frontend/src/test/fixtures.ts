@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: MIT
 /** Synthetic fixtures shaped like real API responses (captured from the M3 backend). */
 import type {
+  Appointment,
   Conversation,
   ConversationDetail,
   IntakeDraft,
+  Patient,
+  PatientDetail,
   Scenario,
   TurnResult,
 } from "@/lib/api/types";
@@ -12,6 +15,77 @@ import type {
 export const CLINIC_ID = "01a191cc-3a00-7000-8000-00000000c11c";
 export const SCENARIO_ID = "01a191cc-3a27-71ac-84ab-ca4599adaa3a";
 export const CONVERSATION_ID = "01a191cc-ade4-7197-9e80-ad9477bbf4f2";
+export const PATIENT_ID = "01a191cd-0b1e-7c3a-9a51-5a7d1e000001";
+export const APPOINTMENT_ID = "01a191cd-4c2f-7d01-8b11-a9f0e0000a01";
+export const DENTIST_ID = "01a191cc-3a10-7000-8000-00000000d001";
+export const CHECKUP_TYPE_ID = "01a191cc-3a20-7000-8000-00000000a001";
+
+export function patient(overrides: Partial<Patient> = {}): Patient {
+  return {
+    id: PATIENT_ID,
+    first_name: "Ava",
+    last_name: "Lindqvist",
+    email: "ava.lindqvist@example.com",
+    phone: "+1-555-0101",
+    preferred_contact_channel: "email",
+    patient_type: "new",
+    status: "registered",
+    created_at: "2026-10-31T12:03:10.512000Z",
+    updated_at: "2026-10-31T12:03:10.512000Z",
+    ...overrides,
+  };
+}
+
+export function appointment(overrides: Partial<Appointment> = {}): Appointment {
+  return {
+    id: APPOINTMENT_ID,
+    patient_id: PATIENT_ID,
+    dentist_id: DENTIST_ID,
+    appointment_type_id: CHECKUP_TYPE_ID,
+    conversation_id: null,
+    rescheduled_from_id: null,
+    status: "confirmed",
+    starts_at: "2026-11-03T10:00:00Z",
+    ends_at: "2026-11-03T10:30:00Z",
+    starts_at_local: "2026-11-03T10:00:00+00:00",
+    ends_at_local: "2026-11-03T10:30:00+00:00",
+    timezone: "Europe/London",
+    created_at: "2026-10-31T12:10:00Z",
+    updated_at: "2026-10-31T12:10:00Z",
+    ...overrides,
+  };
+}
+
+export function patientDetail(overrides: Partial<PatientDetail> = {}): PatientDetail {
+  return {
+    patient: patient(),
+    conversations: [
+      {
+        id: CONVERSATION_ID,
+        scenario_id: SCENARIO_ID,
+        state: "COMPLETED",
+        provider_mode: "mock",
+        turn_count: 17,
+        started_at: "2026-10-31T12:00:00Z",
+        ended_at: "2026-10-31T12:03:10Z",
+        created_at: "2026-10-31T11:59:58Z",
+        snapshot_confirmed_at: "2026-10-31T12:03:10Z",
+      },
+    ],
+    appointments: [appointment()],
+    latest_snapshot: {
+      conversation_id: CONVERSATION_ID,
+      confirmed_at: "2026-10-31T12:03:10Z",
+      patient_type: "new",
+      preferred_contact_channel: "email",
+      visit_reason: "Routine cleaning",
+      requested_service: "hygiene_cleaning",
+      preferred_date: "2026-11-03",
+      preferred_time: "10:00:00",
+    },
+    ...overrides,
+  };
+}
 
 function base64Url(value: object): string {
   return btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

@@ -5,6 +5,9 @@ import type {
   Conversation,
   ConversationDetail,
   ListConversationsParams,
+  ListPatientsParams,
+  Patient,
+  PatientDetail,
   Scenario,
   TurnResult,
   WsTicket,
@@ -54,6 +57,18 @@ export interface ApiClient {
    * `403`). Probed without side effects; see `TEXT_TURN_PROBE_ID`.
    */
   textTurnsEnabled(options?: RequestOptions): Promise<boolean>;
+
+  listPatients(params?: ListPatientsParams, options?: RequestOptions): Promise<Patient[]>;
+  getPatient(id: string, options?: RequestOptions): Promise<PatientDetail>;
+}
+
+/** Builds `?a=1&b=2` from the defined, non-empty values; `""` when there are none. */
+function queryString(params: Record<string, string | number | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+  return query.size > 0 ? `?${query.toString()}` : "";
 }
 
 /** Caller clip URLs as the voice socket sends them (`clip.url`). */
@@ -203,5 +218,20 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         throw error;
       }
     },
+
+    listPatients: (params = {}, opts) =>
+      request<Patient[]>(
+        "GET",
+        `/api/v1/patients${queryString({
+          q: params.q?.trim(),
+          status: params.status,
+          limit: params.limit,
+          offset: params.offset,
+        })}`,
+        undefined,
+        opts,
+      ),
+    getPatient: (patientId, opts) =>
+      request<PatientDetail>("GET", `/api/v1/patients/${id(patientId)}`, undefined, opts),
   };
 }
