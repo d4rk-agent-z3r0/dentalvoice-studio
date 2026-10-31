@@ -193,6 +193,42 @@ describe("createApiClient", () => {
     ]);
     expect(api.requests[3].path).toBe("/api/v1/patients/p%2F1");
   });
+
+  it("sends booking writes with the Idempotency-Key header and the documented bodies", async () => {
+    const api = fakeApi({
+      "GET /api/v1/clinic": { status: 200, body: {} },
+      "GET /api/v1/appointments": { status: 200, body: [] },
+      "GET /api/v1/availability": { status: 200, body: {} },
+      "POST /api/v1/appointments": { status: 201, body: {} },
+      "POST /api/v1/appointments/a-1/cancel": { status: 200, body: {} },
+      "POST /api/v1/appointments/a-1/reschedule": { status: 201, body: {} },
+    });
+    const client = createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl });
+    const body = {
+      patient_id: "p",
+      appointment_type_id: "t",
+      dentist_id: "d",
+      starts_at: "2030-01-07T09:00:00Z",
+      conversation_id: null,
+    };
+
+    await client.getClinic();
+    await client.listAppointments({ from: "2030-01-07", to: "2030-01-08", status: "confirmed" });
+    await client.getAvailability({ appointmentTypeId: "t", date: "2030-01-07", days: 2 });
+    await client.createAppointment(body, "key-12345678");
+    await client.cancelAppointment("a-1");
+    await client.rescheduleAppointment("a-1", "2030-01-07T10:00:00Z");
+
+    const [, list, slots, create, cancel, reschedule] = api.requests;
+    expect(list.search).toBe("?from=2030-01-07&to=2030-01-08&status=confirmed");
+    expect(slots.search).toBe("?appointment_type_id=t&date=2030-01-07&days=2");
+    expect(create.headers.get("Idempotency-Key")).toBe("key-12345678");
+    expect(create.headers.get("Authorization")).toBe("Bearer t");
+    expect(create.body).toEqual(body);
+    expect(cancel.body).toBeUndefined();
+    expect(cancel.headers.has("Idempotency-Key")).toBe(false);
+    expect(reschedule.body).toEqual({ starts_at: "2030-01-07T10:00:00Z" });
+  });
 });
 
 describe("voice endpoints", () => {

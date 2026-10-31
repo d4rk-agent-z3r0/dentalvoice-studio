@@ -262,6 +262,79 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface ListAppointmentsParams {
+  /** First clinic-local day, `YYYY-MM-DD`, inclusive. */
+  from?: string;
+  /** Last clinic-local day, `YYYY-MM-DD`, inclusive. */
+  to?: string;
+  status?: AppointmentStatus;
+  /** 1–200; the backend default is 100. */
+  limit?: number;
+}
+
+/** `AppointmentCreate`. `starts_at` must carry an offset; the server stores it in UTC. */
+export interface AppointmentCreate {
+  patient_id: string;
+  appointment_type_id: string;
+  dentist_id: string;
+  starts_at: string;
+  conversation_id: string | null;
+}
+
+export interface AvailabilityParams {
+  appointmentTypeId: string;
+  /** First clinic-local day, `YYYY-MM-DD`. */
+  date: string;
+  /** 1–14; the backend default is 1. */
+  days?: number;
+}
+
+/** `AvailableSlotRead`. */
+export interface AvailableSlot {
+  dentist_id: string;
+  dentist_name: string;
+  starts_at: string;
+  ends_at: string;
+  starts_at_local: string;
+  ends_at_local: string;
+}
+
+/** `AvailabilityRead`. */
+export interface Availability {
+  appointment_type_id: string;
+  duration_minutes: number;
+  timezone: string;
+  first_day: string;
+  days: number;
+  slots: AvailableSlot[];
+}
+
+/** `AppointmentTypeRead`. */
+export interface AppointmentType {
+  id: string;
+  code: string;
+  name: string;
+  duration_minutes: number;
+  is_active: boolean;
+}
+
+/** `DentistRead`. */
+export interface Dentist {
+  id: string;
+  display_name: string;
+  is_active: boolean;
+}
+
+/** `ClinicRead`: the token's clinic. `today` is the clinic-local calendar day. */
+export interface ClinicInfo {
+  id: string;
+  name: string;
+  timezone: string;
+  today: string;
+  appointment_types: AppointmentType[];
+  dentists: Dentist[];
+}
+
 /** `PatientDetail`. */
 export interface PatientDetail {
   patient: Patient;

@@ -19,6 +19,14 @@ class DentistRepository:
         stmt = select(Dentist).where(Dentist.clinic_id == clinic_id, Dentist.id == dentist_id)
         return await self._session.scalar(stmt)
 
+    async def list_all(self, clinic_id: uuid.UUID) -> Sequence[Dentist]:
+        stmt = (
+            select(Dentist)
+            .where(Dentist.clinic_id == clinic_id)
+            .order_by(Dentist.display_name, Dentist.id)
+        )
+        return (await self._session.scalars(stmt)).all()
+
     async def list_active(self, clinic_id: uuid.UUID) -> Sequence[Dentist]:
         stmt = (
             select(Dentist)

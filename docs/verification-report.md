@@ -485,3 +485,52 @@ migration and no dependency was added.
 | Frontend unit | `pnpm test` | 63 passed in 8 files (10 new: patients list 5, patient profile 4, API client 1) |
 | ESLint, tsc | `pnpm lint && pnpm typecheck` | clean |
 | SPDX headers | `python3 scripts/add_spdx_headers.py --check` | clean |
+
+### `feat(appointments): implement appointment dashboard`
+
+The appointment page needs the clinic's appointment types (to look up availability), dentist and
+type names (an `Appointment` carries ids only) and the clinic-local "today". No endpoint returned
+them, so this commit adds `GET /api/v1/clinic` (read only, any role, clinic from the token).
+
+| Check | Command | Result |
+|---|---|---|
+| Clinic API (`test_api_clinic.py`) | `uv run pytest tests/integration/test_api_clinic.py` | 2 passed: the token's clinic, timezone and every type and dentist with `is_active` (inactive ones flagged); another clinic's dentists absent; another token gets its own clinic; no token `401`; `today` is 1 November in Auckland at 2026-10-31 20:00 UTC |
+| Appointments dashboard (`AppointmentsDashboard.test.tsx`) | `pnpm test` | 11 passed: default range is clinic today + 13 days; names, clinic-local times and status from the server; range/status filters in the query; viewer sees no booking form, no actions and sends no availability request; booking posts the exact body with an `Idempotency-Key` and shows the returned status; `409 BOOKING_SLOT_TAKEN` refetches availability, clears the choice and says the time was just taken; a retry after a network failure reuses the key while a new choice gets a new key; a `403` is shown even though the UI offered the action; cancel needs confirmation and reloads; `409 APPOINTMENT_NOT_ACTIVE` reloads; reschedule offers only the same dentist's times, focuses its panel, refetches on `409` and reports the new appointment |
+| Mutation | Generate a new key on every submit; skip the availability refetch after a `409` | 2 tests failed as intended; restored |
+| Backend unit | `uv run pytest -m "not integration"` | 452 passed |
+| Backend integration | `uv run pytest -m integration` | 122 passed (2 new) in 1 of 4 full runs; see the flaky tests below |
+| Ruff, ruff format, mypy `--strict` | as above | clean (138 files) |
+| Frontend unit | `pnpm test` | 76 passed in 9 files (13 new: dashboard 11, profile 1, API client 1) |
+| ESLint, tsc, SPDX headers | as above | clean |
+
+Browser check (Playwright driving Chromium against `next dev` on port 3011 and the backend on 8011
+in mock mode, `ENVIRONMENT=development`, a dedicated database migrated and seeded with
+`app.demo.seed --days 14`; scenarios A and B completed through the typed-turn endpoint; tokens from
+`app.devtools.token` for `demo.staff@example.com` and `demo.viewer@example.org` at `brightsmile`):
+
+| Step | Result |
+|---|---|
+| Patients list, search `ava lind` | URL `?q=ava+lind`, one row, Ava Lindqvist |
+| Profile | contact values, latest confirmed intake (routine cleaning, `hygiene_cleaning`, Tue 3 Nov 2026 10:00), the completed scenario-A call marked Confirmed |
+| Book from the profile link | patient preselected; 21 hygiene-cleaning times on Mon 2 Nov; booked 09:00–09:45 with Dr. Mira Calloway, shown as `Confirmed` from the response |
+| Slot taken | with a time selected in the UI, the same time was booked through the API (`201`); the UI's booking then showed `BOOKING_SLOT_TAKEN · HTTP 409 · request …`, refetched availability, and the taken time was no longer offered |
+| Cancel | Marcus Bellweather's check-up cancelled after confirmation; the row shows `Cancelled`, no actions |
+| Reschedule | panel focused; moved to 14:30–15:15; the old row shows `Rescheduled`, the profile lists both |
+| Viewer | read-only note, no booking form, no Cancel/Reschedule buttons; cancelling through the API with the viewer token `403 FORBIDDEN` |
+| Horizontal overflow, 1280 px and 390 px (patients, profile, appointments) | none |
+| Console | only the browser's own log line for the intentional `409` |
+
+Found and fixed from the screenshots: at 390 px the appointments grid overflowed to 530 px and the
+action buttons were clipped (the grid track now has `min-w-0`, the status moves under the name on
+phones, and the date and time are on two lines); the appointment-type select was clipped in the
+booking card at 1280 px; on a phone the profile's appointment table hid the status column; and
+after a `409 BOOKING_SLOT_TAKEN` the appointment list was not refreshed, so the booking that took
+the time did not appear (now covered by the dashboard test).
+
+Two existing tests failed intermittently in full integration runs on this host (2 CPUs, shared with
+another session) and passed on rerun; neither involves code changed here:
+
+| Test | Observed | Cause |
+|---|---|---|
+| `test_booking_concurrency.py` 20-way race (`overlapping_starts`), and once the concurrent-replays test | 3 of 4 full runs; in the inspected failure the losers got `DBAPIError: deadlock detected` instead of `BOOKING_SLOT_TAKEN`; the file alone passed 5 of 5 | Concurrent inserts checked by one exclusion constraint can wait on each other and deadlock (PostgreSQL aborts one). `ReservationService` maps only the exclusion violation, so a deadlock would reach the client as a 500. Needs a booking-engine fix (map or retry `40P01`); not changed in this milestone |
+| `test_intake_service.py::test_events_never_contain_field_values` | 1 of 4 full runs | Asserts `"212"` is absent from the event payloads' `repr`, which also contains random UUIDs; a UUID containing `212` fails it |

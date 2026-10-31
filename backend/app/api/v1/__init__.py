@@ -6,6 +6,7 @@ from app.api.v1 import (
     appointments,
     audio,
     availability,
+    clinic,
     conversations,
     patients,
     scenarios,
@@ -20,3 +21,4 @@ router.include_router(appointments.router)
 router.include_router(audio.router)
 router.include_router(voice.router)
 router.include_router(patients.router)
+router.include_router(clinic.router)

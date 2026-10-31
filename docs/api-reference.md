@@ -208,6 +208,23 @@ appointment is `404`.
 `starts_at`; `status` is one of `requested`, `confirmed`, `cancelled`, `rescheduled`; `limit` 1–200
 (default 100). Ordered by `starts_at`.
 
+## Clinic — shipped in M7
+
+`GET /api/v1/clinic` · any role · the token's clinic (there is no clinic id in the path)
+
+```json
+{ "id": "…", "name": "BrightSmile Dental Studio", "timezone": "Europe/London", "today": "2026-10-31",
+  "appointment_types": [
+    { "id": "…", "code": "checkup", "name": "Check-up", "duration_minutes": 30, "is_active": true } ],
+  "dentists": [ { "id": "…", "display_name": "Dr. Ada Example", "is_active": true } ] }
+```
+
+`today` is the current calendar day in the clinic's timezone. Types are ordered by name and dentists
+by display name. Inactive ones are included, flagged, so existing appointments can still be
+described; only active ones are bookable. This is the reference data the appointment screens need
+to pick a type and to name the dentist and type of an appointment, which `Appointment` carries as
+ids only.
+
 ## Patients — shipped in M7
 
 Read only. Patients are created or matched by the conversation engine when a call completes with a

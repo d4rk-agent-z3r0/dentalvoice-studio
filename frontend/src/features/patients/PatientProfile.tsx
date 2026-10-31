@@ -8,15 +8,18 @@ import type { ReactNode } from "react";
 import { AppointmentStatusBadge, PatientStatusBadge, StateBadge } from "@/components/ui/Badges";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/StateViews";
+import { namesFrom } from "@/features/appointments/names";
 import { useApiClient } from "@/lib/api/ApiProvider";
 import type {
   Appointment,
+  ClinicInfo,
   PatientConversation,
   PatientDetail,
   PatientSnapshotSummary,
   Scenario,
 } from "@/lib/api/types";
 import { useApiQuery } from "@/lib/api/useApiQuery";
+import { useCanWrite } from "@/lib/auth/roles";
 import {
   CONTACT_CHANNEL_LABELS,
   PATIENT_TYPE_LABELS,
@@ -48,7 +51,11 @@ const backLink = (
 export function PatientProfile({ patientId }: { patientId: string }) {
   const api = useApiClient();
   const query = useApiQuery(`patient:${patientId}`, (signal) =>
-    Promise.all([api.getPatient(patientId, { signal }), api.listScenarios({ signal })]),
+    Promise.all([
+      api.getPatient(patientId, { signal }),
+      api.listScenarios({ signal }),
+      api.getClinic({ signal }),
+    ]),
   );
 
   if (query.status === "loading") return <LoadingState label="Loading patient…" />;
@@ -67,20 +74,26 @@ export function PatientProfile({ patientId }: { patientId: string }) {
       </div>
     );
   }
-  const [detail, scenarios] = query.data;
-  return <ProfileContent detail={detail} scenarios={scenarios} onReload={query.reload} />;
+  const [detail, scenarios, clinic] = query.data;
+  return (
+    <ProfileContent detail={detail} scenarios={scenarios} clinic={clinic} onReload={query.reload} />
+  );
 }
 
 function ProfileContent({
   detail,
   scenarios,
+  clinic,
   onReload,
 }: {
   detail: PatientDetail;
   scenarios: Scenario[];
+  clinic: ClinicInfo;
   onReload: () => void;
 }) {
   const { patient } = detail;
+  const canWrite = useCanWrite();
+  const names = namesFrom(clinic);
   const contact: [string, ReactNode][] = [
     ["Email", patient.email ?? "—"],
     ["Phone", patient.phone ?? "—"],
@@ -140,7 +153,20 @@ function ProfileContent({
       </div>
 
       <Panel title="Appointments">
-        <AppointmentRows appointments={detail.appointments} />
+        <AppointmentRows
+          appointments={detail.appointments}
+          describe={(a) => `${names.type(a.appointment_type_id)} · ${names.dentist(a.dentist_id)}`}
+        />
+        {canWrite ? (
+          <div className="border-t border-slate-100 px-4 py-3">
+            <Link
+              href={`/appointments?patient=${encodeURIComponent(patient.id)}`}
+              className="btn-primary"
+            >
+              Book an appointment
+            </Link>
+          </div>
+        ) : null}
       </Panel>
     </div>
   );
@@ -267,7 +293,7 @@ export function AppointmentRows({
           <tr>
             <th scope="col" className="px-4 py-2">When (clinic time)</th>
             {describe ? (
-              <th scope="col" className="px-4 py-2">Details</th>
+              <th scope="col" className="hidden px-4 py-2 sm:table-cell">Details</th>
             ) : null}
             <th scope="col" className="px-4 py-2">Status</th>
           </tr>
@@ -275,11 +301,19 @@ export function AppointmentRows({
         <tbody className="divide-y divide-slate-100">
           {appointments.map((appointment) => (
             <tr key={appointment.id} className="align-top">
-              <td className="px-4 py-3 whitespace-nowrap text-slate-800">
-                {formatLocalDateTime(appointment.starts_at_local)}–{localClock(appointment.ends_at_local)}
+              <td className="px-4 py-3 text-slate-800">
+                <span className="block sm:whitespace-nowrap">
+                  {formatLocalDateTime(appointment.starts_at_local)}–
+                  {localClock(appointment.ends_at_local)}
+                </span>
                 <span className="block text-xs text-slate-500">{appointment.timezone}</span>
+                {describe ? (
+                  <span className="block text-xs text-slate-600 sm:hidden">{describe(appointment)}</span>
+                ) : null}
               </td>
-              {describe ? <td className="px-4 py-3 text-slate-700">{describe(appointment)}</td> : null}
+              {describe ? (
+                <td className="hidden px-4 py-3 text-slate-700 sm:table-cell">{describe(appointment)}</td>
+              ) : null}
               <td className="px-4 py-3">
                 <AppointmentStatusBadge status={appointment.status} />
               </td>

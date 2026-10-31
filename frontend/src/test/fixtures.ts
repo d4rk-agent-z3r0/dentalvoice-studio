@@ -3,6 +3,8 @@
 /** Synthetic fixtures shaped like real API responses (captured from the M3 backend). */
 import type {
   Appointment,
+  Availability,
+  ClinicInfo,
   Conversation,
   ConversationDetail,
   IntakeDraft,
@@ -19,6 +21,55 @@ export const PATIENT_ID = "01a191cd-0b1e-7c3a-9a51-5a7d1e000001";
 export const APPOINTMENT_ID = "01a191cd-4c2f-7d01-8b11-a9f0e0000a01";
 export const DENTIST_ID = "01a191cc-3a10-7000-8000-00000000d001";
 export const CHECKUP_TYPE_ID = "01a191cc-3a20-7000-8000-00000000a001";
+
+export const CLEANING_TYPE_ID = "01a191cc-3a20-7000-8000-00000000a002";
+export const SECOND_DENTIST_ID = "01a191cc-3a10-7000-8000-00000000d002";
+
+export function clinicInfo(overrides: Partial<ClinicInfo> = {}): ClinicInfo {
+  return {
+    id: CLINIC_ID,
+    name: "BrightSmile Dental Studio",
+    timezone: "Europe/London",
+    today: "2026-11-02",
+    appointment_types: [
+      { id: CHECKUP_TYPE_ID, code: "checkup", name: "Check-up", duration_minutes: 30, is_active: true },
+      {
+        id: CLEANING_TYPE_ID,
+        code: "hygiene_cleaning",
+        name: "Hygiene cleaning",
+        duration_minutes: 45,
+        is_active: true,
+      },
+    ],
+    dentists: [
+      { id: DENTIST_ID, display_name: "Dr. Ada Example", is_active: true },
+      { id: SECOND_DENTIST_ID, display_name: "Dr. Bo Example", is_active: true },
+    ],
+    ...overrides,
+  };
+}
+
+export function availability(
+  slots: Array<{ start: string; end: string; dentist?: "ada" | "bo" }>,
+  overrides: Partial<Availability> = {},
+): Availability {
+  return {
+    appointment_type_id: CHECKUP_TYPE_ID,
+    duration_minutes: 30,
+    timezone: "Europe/London",
+    first_day: "2026-11-02",
+    days: 1,
+    slots: slots.map(({ start, end, dentist = "ada" }) => ({
+      dentist_id: dentist === "ada" ? DENTIST_ID : SECOND_DENTIST_ID,
+      dentist_name: dentist === "ada" ? "Dr. Ada Example" : "Dr. Bo Example",
+      starts_at: `2026-11-02T${start}:00Z`,
+      ends_at: `2026-11-02T${end}:00Z`,
+      starts_at_local: `2026-11-02T${start}:00+00:00`,
+      ends_at_local: `2026-11-02T${end}:00+00:00`,
+    })),
+    ...overrides,
+  };
+}
 
 export function patient(overrides: Partial<Patient> = {}): Patient {
   return {

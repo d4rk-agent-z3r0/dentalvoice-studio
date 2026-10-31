@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: MIT
 import { ApiError, networkError, parseApiError } from "./errors";
 import type {
+  Appointment,
+  AppointmentCreate,
+  Availability,
+  AvailabilityParams,
+  ClinicInfo,
   Conversation,
   ConversationDetail,
+  ListAppointmentsParams,
   ListConversationsParams,
   ListPatientsParams,
   Patient,
@@ -40,10 +46,20 @@ export interface ApiClient {
     params?: ListConversationsParams,
     options?: RequestOptions,
   ): Promise<Conversation[]>;
-  getConversation(id: string, options?: RequestOptions): Promise<ConversationDetail>;
-  createConversation(scenarioId: string, options?: RequestOptions): Promise<Conversation>;
+  getConversation(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<ConversationDetail>;
+  createConversation(
+    scenarioId: string,
+    options?: RequestOptions,
+  ): Promise<Conversation>;
   startConversation(id: string, options?: RequestOptions): Promise<TurnResult>;
-  sendTextTurn(id: string, text: string, options?: RequestOptions): Promise<TurnResult>;
+  sendTextTurn(
+    id: string,
+    text: string,
+    options?: RequestOptions,
+  ): Promise<TurnResult>;
   endConversation(id: string, options?: RequestOptions): Promise<Conversation>;
   /** Single-use WebSocket admission ticket (ADR-0006). */
   issueWsTicket(id: string, options?: RequestOptions): Promise<WsTicket>;
@@ -58,12 +74,42 @@ export interface ApiClient {
    */
   textTurnsEnabled(options?: RequestOptions): Promise<boolean>;
 
-  listPatients(params?: ListPatientsParams, options?: RequestOptions): Promise<Patient[]>;
+  listPatients(
+    params?: ListPatientsParams,
+    options?: RequestOptions,
+  ): Promise<Patient[]>;
   getPatient(id: string, options?: RequestOptions): Promise<PatientDetail>;
+  getClinic(options?: RequestOptions): Promise<ClinicInfo>;
+  listAppointments(
+    params?: ListAppointmentsParams,
+    options?: RequestOptions,
+  ): Promise<Appointment[]>;
+  getAvailability(
+    params: AvailabilityParams,
+    options?: RequestOptions,
+  ): Promise<Availability>;
+  /**
+   * Books and confirms. `idempotencyKey` identifies one user action: sending the same key and body
+   * again returns the original appointment instead of booking twice.
+   */
+  createAppointment(
+    body: AppointmentCreate,
+    idempotencyKey: string,
+    options?: RequestOptions,
+  ): Promise<Appointment>;
+  cancelAppointment(id: string, options?: RequestOptions): Promise<Appointment>;
+  /** Returns the **new** appointment; the original becomes `rescheduled`. */
+  rescheduleAppointment(
+    id: string,
+    startsAt: string,
+    options?: RequestOptions,
+  ): Promise<Appointment>;
 }
 
 /** Builds `?a=1&b=2` from the defined, non-empty values; `""` when there are none. */
-function queryString(params: Record<string, string | number | undefined>): string {
+function queryString(
+  params: Record<string, string | number | undefined>,
+): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== "") query.set(key, String(value));
@@ -93,8 +139,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     body: unknown,
     accept: string,
     { signal }: RequestOptions = {},
+    extraHeaders: Record<string, string> = {},
   ): Promise<Response> {
-    const headers = new Headers({ Accept: accept });
+    const headers = new Headers({ ...extraHeaders, Accept: accept });
     const token = options.getToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
     if (body !== undefined) headers.set("Content-Type", "application/json");
@@ -115,7 +162,11 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
     if (!response.ok) {
       const payload: unknown = await response.json().catch(() => undefined);
-      const error = parseApiError(response.status, payload, response.headers.get("X-Request-ID"));
+      const error = parseApiError(
+        response.status,
+        payload,
+        response.headers.get("X-Request-ID"),
+      );
       if (error.isUnauthorized) options.onUnauthorized?.(error);
       throw error;
     }
@@ -127,8 +178,16 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     path: string,
     body: unknown,
     requestOptions: RequestOptions = {},
+    extraHeaders: Record<string, string> = {},
   ): Promise<T> {
-    const response = await send(method, path, body, "application/json", requestOptions);
+    const response = await send(
+      method,
+      path,
+      body,
+      "application/json",
+      requestOptions,
+      extraHeaders,
+    );
     const payload: unknown = await response.json().catch(() => undefined);
     if (payload === undefined) {
       throw new ApiError({
@@ -146,13 +205,19 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const id = (value: string) => encodeURIComponent(value);
 
   return {
-    listScenarios: (opts) => request<Scenario[]>("GET", "/api/v1/scenarios", undefined, opts),
+    listScenarios: (opts) =>
+      request<Scenario[]>("GET", "/api/v1/scenarios", undefined, opts),
     listConversations: (params = {}, opts) => {
       const query = new URLSearchParams();
       if (params.state) query.set("state", params.state);
       if (params.limit !== undefined) query.set("limit", String(params.limit));
       const suffix = query.size > 0 ? `?${query.toString()}` : "";
-      return request<Conversation[]>("GET", `/api/v1/conversations${suffix}`, undefined, opts);
+      return request<Conversation[]>(
+        "GET",
+        `/api/v1/conversations${suffix}`,
+        undefined,
+        opts,
+      );
     },
     getConversation: (conversationId, opts) =>
       request<ConversationDetail>(
@@ -162,7 +227,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         opts,
       ),
     createConversation: (scenarioId, opts) =>
-      request<Conversation>("POST", "/api/v1/conversations", { scenario_id: scenarioId }, opts),
+      request<Conversation>(
+        "POST",
+        "/api/v1/conversations",
+        { scenario_id: scenarioId },
+        opts,
+      ),
     startConversation: (conversationId, opts) =>
       request<TurnResult>(
         "POST",
@@ -196,7 +266,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         throw new ApiError({
           status: 0,
           code: "UNEXPECTED_RESPONSE",
-          message: "The server announced a caller clip outside the clip endpoint; it was not fetched.",
+          message:
+            "The server announced a caller clip outside the clip endpoint; it was not fetched.",
         });
       }
       const response = await send("GET", path, undefined, "audio/wav", opts);
@@ -232,6 +303,54 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         opts,
       ),
     getPatient: (patientId, opts) =>
-      request<PatientDetail>("GET", `/api/v1/patients/${id(patientId)}`, undefined, opts),
+      request<PatientDetail>(
+        "GET",
+        `/api/v1/patients/${id(patientId)}`,
+        undefined,
+        opts,
+      ),
+    getClinic: (opts) =>
+      request<ClinicInfo>("GET", "/api/v1/clinic", undefined, opts),
+    listAppointments: (params = {}, opts) =>
+      request<Appointment[]>(
+        "GET",
+        `/api/v1/appointments${queryString({
+          from: params.from,
+          to: params.to,
+          status: params.status,
+          limit: params.limit,
+        })}`,
+        undefined,
+        opts,
+      ),
+    getAvailability: (params, opts) =>
+      request<Availability>(
+        "GET",
+        `/api/v1/availability${queryString({
+          appointment_type_id: params.appointmentTypeId,
+          date: params.date,
+          days: params.days,
+        })}`,
+        undefined,
+        opts,
+      ),
+    createAppointment: (body, idempotencyKey, opts) =>
+      request<Appointment>("POST", "/api/v1/appointments", body, opts, {
+        "Idempotency-Key": idempotencyKey,
+      }),
+    cancelAppointment: (appointmentId, opts) =>
+      request<Appointment>(
+        "POST",
+        `/api/v1/appointments/${id(appointmentId)}/cancel`,
+        undefined,
+        opts,
+      ),
+    rescheduleAppointment: (appointmentId, startsAt, opts) =>
+      request<Appointment>(
+        "POST",
+        `/api/v1/appointments/${id(appointmentId)}/reschedule`,
+        { starts_at: startsAt },
+        opts,
+      ),
   };
 }

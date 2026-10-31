@@ -3,12 +3,20 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { PATIENT_ID, appointment, patientDetail, scenario } from "@/test/fixtures";
-import { errorBody, fakeApi, renderWithProviders } from "@/test/render";
+import {
+  PATIENT_ID,
+  appointment,
+  clinicInfo,
+  makeToken,
+  patientDetail,
+  scenario,
+} from "@/test/fixtures";
+import { errorBody, fakeApi, renderWithProviders, signedInStore } from "@/test/render";
 
 import { PatientProfile } from "./PatientProfile";
 
 const scenarios = { status: 200, body: [scenario()] };
+const clinicReply = { status: 200, body: clinicInfo() };
 
 describe("PatientProfile", () => {
   it("shows contact details, the latest confirmed intake, linked calls and appointments", async () => {
@@ -28,6 +36,7 @@ describe("PatientProfile", () => {
         }),
       },
       "GET /api/v1/scenarios": scenarios,
+      "GET /api/v1/clinic": clinicReply,
     });
     renderWithProviders(<PatientProfile patientId={PATIENT_ID} />, { fetchImpl: api.fetchImpl });
 
@@ -63,6 +72,26 @@ describe("PatientProfile", () => {
     expect(appointments[0]).toHaveTextContent("Confirmed");
     expect(appointments[1]).toHaveTextContent("Mon, 2 Nov 2026, 09:00–09:30");
     expect(appointments[1]).toHaveTextContent("Rescheduled");
+    // Type and dentist names come from the clinic reference data.
+    expect(appointments[0]).toHaveTextContent("Check-up · Dr. Ada Example");
+    expect(screen.getByRole("link", { name: "Book an appointment" })).toHaveAttribute(
+      "href",
+      `/appointments?patient=${PATIENT_ID}`,
+    );
+  });
+
+  it("offers no booking link to a viewer", async () => {
+    const api = fakeApi({
+      [`GET /api/v1/patients/${PATIENT_ID}`]: { status: 200, body: patientDetail() },
+      "GET /api/v1/scenarios": scenarios,
+      "GET /api/v1/clinic": clinicReply,
+    });
+    renderWithProviders(<PatientProfile patientId={PATIENT_ID} />, {
+      fetchImpl: api.fetchImpl,
+      store: signedInStore(makeToken({ role: "viewer" })),
+    });
+    expect(await screen.findByRole("region", { name: "Patient appointments" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Book an appointment" })).not.toBeInTheDocument();
   });
 
   it("says so when the patient has no history yet", async () => {
@@ -72,6 +101,7 @@ describe("PatientProfile", () => {
         body: patientDetail({ conversations: [], appointments: [], latest_snapshot: null }),
       },
       "GET /api/v1/scenarios": scenarios,
+      "GET /api/v1/clinic": clinicReply,
     });
     renderWithProviders(<PatientProfile patientId={PATIENT_ID} />, { fetchImpl: api.fetchImpl });
 
@@ -87,6 +117,7 @@ describe("PatientProfile", () => {
         body: errorBody("NOT_FOUND", "Patient not found."),
       },
       "GET /api/v1/scenarios": scenarios,
+      "GET /api/v1/clinic": clinicReply,
     });
     renderWithProviders(<PatientProfile patientId={PATIENT_ID} />, { fetchImpl: api.fetchImpl });
 
@@ -102,6 +133,7 @@ describe("PatientProfile", () => {
         body: errorBody("PROVIDER_UNAVAILABLE", "Database unavailable.", "rid-x"),
       },
       "GET /api/v1/scenarios": scenarios,
+      "GET /api/v1/clinic": clinicReply,
     });
     renderWithProviders(<PatientProfile patientId={PATIENT_ID} />, { fetchImpl: api.fetchImpl });
 

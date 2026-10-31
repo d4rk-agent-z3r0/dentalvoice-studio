@@ -24,8 +24,8 @@ const SECTIONS = [
   {
     href: "/appointments",
     title: "Appointments",
-    body: "Appointment requests and their booking status.",
-    available: false,
+    body: "The clinic calendar in clinic-local time: look up open times, book for a patient, cancel or reschedule.",
+    available: true,
   },
   {
     href: "/analytics",
