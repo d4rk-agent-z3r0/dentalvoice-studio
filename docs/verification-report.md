@@ -534,3 +534,45 @@ another session) and passed on rerun; neither involves code changed here:
 |---|---|---|
 | `test_booking_concurrency.py` 20-way race (`overlapping_starts`), and once the concurrent-replays test | 3 of 4 full runs; in the inspected failure the losers got `DBAPIError: deadlock detected` instead of `BOOKING_SLOT_TAKEN`; the file alone passed 5 of 5 | Concurrent inserts checked by one exclusion constraint can wait on each other and deadlock (PostgreSQL aborts one). `ReservationService` maps only the exclusion violation, so a deadlock would reach the client as a 500. Needs a booking-engine fix (map or retry `40P01`); not changed in this milestone |
 | `test_intake_service.py::test_events_never_contain_field_values` | 1 of 4 full runs | Asserts `"212"` is absent from the event payloads' `repr`, which also contains random UUIDs; a UUID containing `212` fails it |
+
+### `feat(analytics): add clinic performance dashboard`
+
+| Check | Command | Result |
+|---|---|---|
+| Analytics API (`test_api_analytics.py`) | `uv run pytest tests/integration/test_api_analytics.py` | 5 passed. Known data (8 calls): `by_state` lists all 12 states, `ended` 6, `in_progress` 2, `completion_rate` 2/6, average duration 120 s over 4 calls (calls never started excluded), escalation reasons `urgent_symptoms` 2, `caller_request` 1. Latency over llm 100, 200, 300, 400, 1000, 2000 ms: p50 350, p95 1750 (`percentile_cont`); `total` 150, 250: p50 200, p95 245; `provider_mode=mock` p50 250 / p95 385, `live` 1500 / 1950 and `total` null; unmeasured `stt`/`tts` `samples: 0` and `null`. Empty clinic and a clinic whose turns carry no timing: `null` everywhere, never 0. Another clinic's figures are its own; a `clinic_id` query parameter is ignored; no token `401`; bad `provider_mode` `400` |
+| Repository contract | `uv run pytest tests/unit/test_repository_contract.py` | 12 passed (`AnalyticsRepository` added) |
+| Mutation | p50 computed with `percentile_cont(0.4)`; empty clinic's completion rate `0.0` instead of `null` | 1 and 2 tests failed as intended; restored |
+| Mutation (frontend) | null p50 rendered as `0.0 ms` and null completion rate as `0%` | 2 dashboard tests failed as intended; restored |
+| Backend unit | `uv run pytest -m "not integration"` | 453 passed |
+| Backend integration | `uv run pytest -m integration` | 127 passed (13 new across the milestone), 2 consecutive full runs |
+| Tool tests, `mypy --strict ../scripts` | `uv run pytest ../scripts/tests` | 19 passed; clean |
+| Ruff, ruff format, mypy `--strict` | as above | clean (143 files) |
+| Frontend unit | `pnpm test` | 81 passed in 10 files (5 new: dashboard 4, API client 1) |
+| ESLint, tsc, SPDX headers | as above | clean |
+| Next build | `NEXT_PUBLIC_API_BASE_URL=http://localhost:8011 pnpm build` | success: `/`, `/analytics`, `/appointments`, `/conversations`, `/patients`, `/simulator` static; `/conversations/[id]` and `/patients/[id]` partial prerender |
+
+Browser check, same setup as above, after also completing scenarios C, D and E and starting one
+call that was left in progress; then repeated against the production build (`pnpm start`):
+
+| Step | Result |
+|---|---|
+| Dashboard figures (equal to `GET /api/v1/analytics/summary`) | 6 conversations, 1 in progress, 5 ended; completion 60 % (3 of 5); 1 escalation, reason `urgent_symptoms`; average duration 0.2 s over 5 calls (typed turns are fast) |
+| Conversations by state | Greeting 1, Completed 3, Escalated 1, Abandoned 1, every other state 0 |
+| Latency, all calls | Language model p50 0.0 ms, p95 0.3 ms over 34 mock turns; speech to text, text to speech and whole turn "No data yet" with 0 samples |
+| Latency, live calls only | "No data yet" for every stage |
+| Viewer | same figures (read only) |
+| Horizontal overflow, 1280 px and 390 px | none |
+| Console | no errors or warnings |
+| Production build: patients and appointments flow from the previous commit repeated | same results; no overflow at either width |
+
+Found and fixed from the screenshots: at 390 px the latency table wrapped "No data yet" over three
+lines, and an average under one second was rounded to "0 s" (now "0.2 s").
+
+The browser checks used a dedicated database (`dv_test_ui_dash`) because the shared `dv_test_ui`
+database was reset by another session while the first run was in progress. Screenshots are kept
+outside the repository: `01-patients-desktop` to `16-analytics-mobile` (`-prod` suffix for the
+production-build analytics run).
+
+Not verified here: the Docker image build with the new pages; screen-reader behaviour beyond the
+roles and labels the unit tests assert; latency figures with real speech timings, which need
+Milestone 5.

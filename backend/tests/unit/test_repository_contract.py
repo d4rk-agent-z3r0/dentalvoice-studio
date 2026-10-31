@@ -6,6 +6,7 @@ import inspect
 
 import pytest
 
+from app.repositories.analytics import AnalyticsRepository
 from app.repositories.appointments import AppointmentRepository
 from app.repositories.clinics import ClinicRepository
 from app.repositories.conversations import ConversationRepository
@@ -17,6 +18,7 @@ from app.repositories.slots import SlotRepository
 from app.repositories.turns import TurnRepository
 
 REPOSITORIES = [
+    AnalyticsRepository,
     AppointmentRepository,
     AppointmentTypeRepository,
     ClinicRepository,

@@ -229,6 +229,22 @@ describe("createApiClient", () => {
     expect(cancel.headers.has("Idempotency-Key")).toBe(false);
     expect(reschedule.body).toEqual({ starts_at: "2030-01-07T10:00:00Z" });
   });
+
+  it("requests analytics, with the provider mode only when one is chosen", async () => {
+    const api = fakeApi({
+      "GET /api/v1/analytics/summary": { status: 200, body: {} },
+      "GET /api/v1/analytics/latency": { status: 200, body: {} },
+    });
+    const client = createApiClient({ baseUrl: BASE, getToken: () => "t", fetchImpl: api.fetchImpl });
+    await client.getAnalyticsSummary();
+    await client.getLatency();
+    await client.getLatency("mock");
+    expect(api.requests.map((r) => `${r.path}${r.search}`)).toEqual([
+      "/api/v1/analytics/summary",
+      "/api/v1/analytics/latency",
+      "/api/v1/analytics/latency?provider_mode=mock",
+    ]);
+  });
 });
 
 describe("voice endpoints", () => {

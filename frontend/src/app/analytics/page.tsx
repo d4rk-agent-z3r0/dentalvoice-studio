@@ -2,16 +2,22 @@
 // SPDX-License-Identifier: MIT
 import type { Metadata } from "next";
 
-import { ComingSoon } from "@/components/ComingSoon";
+import { RequireSession } from "@/components/auth/RequireSession";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ClinicDashboard } from "@/features/analytics/ClinicDashboard";
 
 export const metadata: Metadata = { title: "Analytics" };
 
 export default function AnalyticsPage() {
   return (
-    <ComingSoon
-      title="Analytics"
-      description="Completion rates and measured stage latency, computed from persisted data only."
-      dependsOn="The analytics API (GET /api/v1/analytics/summary and /latency) is not available yet."
-    />
+    <>
+      <PageHeader
+        title="Clinic dashboard"
+        description="Call outcomes, durations and measured latency, computed by the server from stored conversations. Nothing here is estimated: a figure without data says so."
+      />
+      <RequireSession>
+        <ClinicDashboard />
+      </RequireSession>
+    </>
   );
 }

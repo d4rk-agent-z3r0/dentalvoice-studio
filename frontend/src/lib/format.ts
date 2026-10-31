@@ -168,6 +168,25 @@ export function formatClockTime(value: string): string {
   return match ? `${match[1]}:${match[2]}` : value;
 }
 
+/** `125.4` → `2 min 5 s`; under ten seconds keeps one decimal (`0.234` → `0.2 s`). */
+export function formatSeconds(seconds: number): string {
+  if (seconds < 10) return `${seconds.toFixed(1)} s`;
+  const total = Math.round(seconds);
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return minutes > 0 ? `${minutes} min ${rest} s` : `${rest} s`;
+}
+
+/** A ratio in [0, 1] as a whole percentage (`0.333…` → `33%`). */
+export function formatPercent(ratio: number): string {
+  return `${Math.round(ratio * 100)}%`;
+}
+
+/** A percentile in milliseconds: whole numbers from 10 ms, one decimal below. */
+export function formatLatency(ms: number): string {
+  return ms >= 10 ? `${Math.round(ms)} ms` : `${ms.toFixed(1)} ms`;
+}
+
 /** A measured duration in milliseconds; `—` when the server did not measure it. */
 export function formatMs(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `${value} ms`;

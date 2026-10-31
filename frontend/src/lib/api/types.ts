@@ -342,3 +342,45 @@ export interface PatientDetail {
   appointments: Appointment[];
   latest_snapshot: PatientSnapshotSummary | null;
 }
+
+export interface EscalationReasonCount {
+  reason: string;
+  count: number;
+}
+
+/**
+ * `AnalyticsSummary`: counts from persisted conversations. `completion_rate` is completed / ended,
+ * `null` before any call has ended; `average_duration_seconds` is `null` when no call has both a
+ * start and an end.
+ */
+export interface AnalyticsSummary {
+  generated_at: string;
+  conversations_total: number;
+  by_state: Record<ConversationState, number>;
+  in_progress: number;
+  ended: number;
+  completed: number;
+  escalated: number;
+  abandoned: number;
+  completion_rate: number | null;
+  average_duration_seconds: number | null;
+  duration_samples: number;
+  escalation_reasons: EscalationReasonCount[];
+}
+
+export type LatencyStage = "stt" | "llm" | "tts" | "total";
+
+/** `StageLatency`. Percentiles are `null` when the stage has no measurement (never 0). */
+export interface StageLatency {
+  stage: LatencyStage;
+  samples: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+}
+
+/** `LatencyReport`. */
+export interface LatencyReport {
+  generated_at: string;
+  provider_mode: ProviderMode | null;
+  stages: StageLatency[];
+}

@@ -30,8 +30,8 @@ const SECTIONS = [
   {
     href: "/analytics",
     title: "Analytics",
-    body: "Completion rates and measured latency, computed from persisted data only.",
-    available: false,
+    body: "The clinic dashboard: call outcomes, completion rate, escalations, durations and measured p50/p95 latency, computed from stored calls.",
+    available: true,
   },
 ] as const;
 

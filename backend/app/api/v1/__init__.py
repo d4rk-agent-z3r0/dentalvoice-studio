@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    analytics,
     appointments,
     audio,
     availability,
@@ -22,3 +23,4 @@ router.include_router(audio.router)
 router.include_router(voice.router)
 router.include_router(patients.router)
 router.include_router(clinic.router)
+router.include_router(analytics.router)

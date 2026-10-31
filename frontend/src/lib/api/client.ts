@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 import { ApiError, networkError, parseApiError } from "./errors";
 import type {
+  AnalyticsSummary,
   Appointment,
   AppointmentCreate,
   Availability,
@@ -11,6 +12,8 @@ import type {
   ConversationDetail,
   ListAppointmentsParams,
   ListConversationsParams,
+  ProviderMode,
+  LatencyReport,
   ListPatientsParams,
   Patient,
   PatientDetail,
@@ -98,6 +101,9 @@ export interface ApiClient {
     options?: RequestOptions,
   ): Promise<Appointment>;
   cancelAppointment(id: string, options?: RequestOptions): Promise<Appointment>;
+  getAnalyticsSummary(options?: RequestOptions): Promise<AnalyticsSummary>;
+  /** `providerMode` limits the percentiles to mock or live calls; omitted means all. */
+  getLatency(providerMode?: ProviderMode, options?: RequestOptions): Promise<LatencyReport>;
   /** Returns the **new** appointment; the original becomes `rescheduled`. */
   rescheduleAppointment(
     id: string,
@@ -342,6 +348,15 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       request<Appointment>(
         "POST",
         `/api/v1/appointments/${id(appointmentId)}/cancel`,
+        undefined,
+        opts,
+      ),
+    getAnalyticsSummary: (opts) =>
+      request<AnalyticsSummary>("GET", "/api/v1/analytics/summary", undefined, opts),
+    getLatency: (providerMode, opts) =>
+      request<LatencyReport>(
+        "GET",
+        `/api/v1/analytics/latency${queryString({ provider_mode: providerMode })}`,
         undefined,
         opts,
       ),

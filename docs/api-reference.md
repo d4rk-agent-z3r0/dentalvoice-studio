@@ -274,9 +274,45 @@ are in every status, latest start first. Each list holds at most 100 rows. `late
 most recently confirmed snapshot among the linked calls, without its contact values (those are on
 `patient`), or `null`.
 
-## Analytics — M7
+## Analytics — shipped in M7
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/api/v1/analytics/summary` | Counts, completion rate, avg duration from persisted data |
-| GET | `/api/v1/analytics/latency` | p50/p95 of measured stage timings |
+Read only, any role, the token's clinic. Every figure is computed by PostgreSQL from stored rows at
+request time; nothing is estimated or defaulted, and `null` means "nothing to measure yet", never 0.
+
+### `GET /api/v1/analytics/summary`
+
+```json
+{ "generated_at": "2026-10-31T13:26:45Z", "conversations_total": 6,
+  "by_state": { "CREATED": 0, "GREETING": 1, "…": 0, "COMPLETED": 3, "ESCALATED": 1, "ABANDONED": 1 },
+  "in_progress": 1, "ended": 5, "completed": 3, "escalated": 1, "abandoned": 1,
+  "completion_rate": 0.6, "average_duration_seconds": 0.234, "duration_samples": 5,
+  "escalation_reasons": [ { "reason": "urgent_symptoms", "count": 1 } ] }
+```
+
+| Field | Definition |
+|---|---|
+| `by_state` | Conversations per state; every state is present (a real zero count is `0`) |
+| `ended` / `in_progress` | Terminal (`COMPLETED`, `ESCALATED`, `ABANDONED`) / all other states |
+| `completion_rate` | `completed / ended`; `null` while no call has ended |
+| `average_duration_seconds` | Mean of `ended_at - started_at` over the `duration_samples` calls that have both (a call hung up before it started has no duration); `null` when there are none |
+| `escalation_reasons` | `escalated` timeline events grouped by `payload.reason`, most frequent first |
+
+The figures are read in one `REPEATABLE READ` transaction, so they are consistent with each other.
+
+### `GET /api/v1/analytics/latency?provider_mode=`
+
+```json
+{ "generated_at": "…", "provider_mode": null,
+  "stages": [
+    { "stage": "stt", "samples": 0, "p50_ms": null, "p95_ms": null },
+    { "stage": "llm", "samples": 34, "p50_ms": 0.0, "p95_ms": 0.35 },
+    { "stage": "tts", "samples": 0, "p50_ms": null, "p95_ms": null },
+    { "stage": "total", "samples": 0, "p50_ms": null, "p95_ms": null } ] }
+```
+
+`p50_ms`/`p95_ms` are `percentile_cont(0.5|0.95)` (linear interpolation) over the non-null
+`stt_ms`, `llm_ms`, `tts_ms` and `total_ms` of the clinic's `conversation_turns`; `samples` is the
+number of measurements. A stage with no measurement has `samples: 0` and `null` percentiles. Typed
+text turns record only `llm_ms`; `stt`, `tts` and `total` appear once Milestone 5 streams audio. Optional
+`provider_mode` (`mock` or `live`) limits the turns to calls run with that provider; anything else
+is `400`.
