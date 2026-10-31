@@ -32,4 +32,5 @@ def build_conversation_provider(settings: Settings) -> ConversationModelProvider
         api_key=settings.gemini_api_key.get_secret_value(),
         model=settings.gemini_model,
         timeout_seconds=settings.llm_timeout_seconds,
+        max_attempts=settings.llm_max_attempts,
     )

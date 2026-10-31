@@ -46,12 +46,13 @@ async def test_request_shape() -> None:
     "fixture", ["invalid_json.json", "schema_violation.json", "max_tokens_truncated.json"]
 )
 async def test_malformed_output_is_an_error_not_a_partial_proposal(fixture: str) -> None:
-    fake = FakeGemini((200, fixture))
+    fake = FakeGemini((200, fixture), (200, fixture))  # the re-ask is malformed too
     with pytest.raises(ProviderError):
         await fake.provider().propose(context())
+    assert fake.remaining == 0
 
 
 async def test_blocked_prompt_is_an_error() -> None:
-    fake = FakeGemini((200, "safety_blocked.json"))
+    fake = FakeGemini((200, "safety_blocked.json"), (200, "safety_blocked.json"))
     with pytest.raises(ProviderError, match="SAFETY"):
         await fake.provider().propose(context())
