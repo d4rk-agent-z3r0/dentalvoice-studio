@@ -6,20 +6,27 @@ import inspect
 
 import pytest
 
+from app.repositories.appointments import AppointmentRepository
 from app.repositories.clinics import ClinicRepository
 from app.repositories.conversations import ConversationRepository
+from app.repositories.dentists import AppointmentTypeRepository, DentistRepository
 from app.repositories.intake import EventRepository, IntakeRepository
 from app.repositories.patients import PatientRepository
 from app.repositories.scenarios import ScenarioRepository
+from app.repositories.slots import SlotRepository
 from app.repositories.turns import TurnRepository
 
 REPOSITORIES = [
+    AppointmentRepository,
+    AppointmentTypeRepository,
     ClinicRepository,
     ConversationRepository,
+    DentistRepository,
     EventRepository,
     IntakeRepository,
     PatientRepository,
     ScenarioRepository,
+    SlotRepository,
     TurnRepository,
 ]
 # These receive an ORM object whose clinic_id the caller has already set.

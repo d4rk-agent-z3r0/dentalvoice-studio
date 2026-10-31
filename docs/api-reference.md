@@ -81,13 +81,44 @@ entered in that turn, `state_version`, the receptionist `reply`, `missing_fields
 | S→C | `latency` | `{turn_seq, stt_ms, llm_ms, tts_first_byte_ms, total_ms}` measured server-side |
 | S→C | `error` | `{code, message, provider?}` — surfaced in UI, never swallowed |
 
+## Availability — shipped in M6
+
+`GET /api/v1/availability?appointment_type_id=&date=&days=` · any role
+
+| Parameter | Rules |
+|---|---|
+| `appointment_type_id` | Required. An active type of the token's clinic; anything else (unknown, inactive, another clinic's) is `404 NOT_FOUND` |
+| `date` | Required. First clinic-local day, `YYYY-MM-DD` |
+| `days` | Optional, 1–14, default 1 |
+
+A start time is offered when consecutive **open** published slots of one active dentist tile
+exactly `[start, start + duration)`, no active (`requested`/`confirmed`) appointment of that dentist
+overlaps it, it lies inside the requested local days and it is in the future. Local days are
+resolved per date, so a daylight-saving day is 23 or 25 hours long and opening hours stay at the
+same wall-clock time. Availability is advisory: a listed time can still be taken by the time it is
+booked (`409 BOOKING_SLOT_TAKEN`).
+
+```json
+{
+  "appointment_type_id": "…", "duration_minutes": 45, "timezone": "Europe/London",
+  "first_day": "2030-01-07", "days": 1,
+  "slots": [
+    { "dentist_id": "…", "dentist_name": "Dr. Ada Example",
+      "starts_at": "2030-01-07T09:00:00Z", "ends_at": "2030-01-07T09:45:00Z",
+      "starts_at_local": "2030-01-07T09:00:00+00:00", "ends_at_local": "2030-01-07T09:45:00+00:00" }
+  ]
+}
+```
+
+Slots are ordered by start time, then dentist. `starts_at`/`ends_at` are UTC; the `*_local` strings
+are the same instants in the clinic's timezone, with their offset.
+
 ## Patients, appointments, analytics — M6/M7
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/patients?q=&status=` | Search + filter |
 | GET | `/api/v1/patients/{id}` | Profile, snapshots, conversations, appointments |
-| GET | `/api/v1/availability?appointment_type_id=&date=` | Slots in clinic-local time + UTC |
 | GET | `/api/v1/appointments?from=&to=&status=` | |
 | POST | `/api/v1/appointments` | Header `Idempotency-Key` required; same key + same body → same result; different body → `409 IDEMPOTENCY_CONFLICT` |
 | POST | `/api/v1/appointments/{id}/cancel` | |
