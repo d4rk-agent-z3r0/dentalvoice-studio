@@ -13869,12 +13869,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 3,
-            "location": "vitest.setup.ts"
-          }
         ]
       },
       "externalReferences": [
@@ -13997,16 +13991,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 4,
-            "location": "vitest.setup.ts"
-          },
-          {
-            "line": 8,
-            "location": "vitest.setup.ts"
-          }
         ]
       },
       "externalReferences": [
@@ -14056,7 +14040,7 @@
       "properties": [
         {
           "name": "ImportedModules",
-          "value": "@testing-library/react,cleanup,@testing-library/react/cleanup"
+          "value": "react,useCallback,react/useCallback,useEffect,react/useEffect,useEffectEvent,react/useEffectEvent,useState,react/useState,react/use,Suspense,react/Suspense,useId,react/useId,FormEvent,react/FormEvent,ReactNode,react/ReactNode,useRef,react/useRef,createContext,react/createContext,useContext,react/useContext,useMemo,react/useMemo,useSyncExternalStore,react/useSyncExternalStore"
         },
         {
           "name": "SrcFile",
@@ -15088,7 +15072,7 @@
         }
       ],
       "purl": "pkg:npm/%40types/react@19.3.0",
-      "scope": "excluded",
+      "scope": "required",
       "type": "library",
       "version": "19.3.0"
     },
@@ -18502,16 +18486,6 @@
                 "value": "pnpm-lock.yaml"
               }
             ]
-          }
-        ],
-        "occurrences": [
-          {
-            "line": 3,
-            "location": "vitest.config.mts"
-          },
-          {
-            "line": 8,
-            "location": "vitest.config.mts"
           }
         ]
       },
@@ -27496,16 +27470,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 2,
-            "location": "eslint.config.mjs"
-          },
-          {
-            "line": 3,
-            "location": "eslint.config.mjs"
-          }
         ]
       },
       "externalReferences": [
@@ -28765,20 +28729,6 @@
                 "value": "pnpm-lock.yaml"
               }
             ]
-          }
-        ],
-        "occurrences": [
-          {
-            "line": 1,
-            "location": "eslint.config.mjs"
-          },
-          {
-            "line": 5,
-            "location": "eslint.config.mjs"
-          },
-          {
-            "line": 9,
-            "location": "eslint.config.mjs"
           }
         ]
       },
@@ -44302,12 +44252,6 @@
               }
             ]
           }
-        ],
-        "occurrences": [
-          {
-            "line": 3,
-            "location": "src/app/layout.tsx"
-          }
         ]
       },
       "externalReferences": [
@@ -44357,7 +44301,7 @@
       "properties": [
         {
           "name": "ImportedModules",
-          "value": "next,Metadata,next/Metadata"
+          "value": "next,Metadata,next/Metadata,next/navigation,useRouter,next/navigation/useRouter,useSearchParams,next/navigation/useSearchParams,next/link,usePathname,next/navigation/usePathname"
         },
         {
           "name": "SrcFile",
@@ -44384,10 +44328,6 @@
           "value": "true"
         },
         {
-          "name": "cdx:npm:package:type-only",
-          "value": "true"
-        },
-        {
           "name": "cdx:npm:provenanceUrl",
           "value": "https://registry.npmjs.org/-/npm/v1/attestations/next@16.4.3"
         },
@@ -44401,7 +44341,7 @@
         }
       ],
       "purl": "pkg:npm/next@16.4.3",
-      "scope": "excluded",
+      "scope": "required",
       "tags": [
         "framework"
       ],
@@ -48120,6 +48060,10 @@
       "name": "react",
       "properties": [
         {
+          "name": "ImportedModules",
+          "value": "react,useCallback,react/useCallback,useEffect,react/useEffect,useEffectEvent,react/useEffectEvent,useState,react/useState,react/use,Suspense,react/Suspense,useId,react/useId,FormEvent,react/FormEvent,ReactNode,react/ReactNode,useRef,react/useRef,createContext,react/createContext,useContext,react/useContext,useMemo,react/useMemo,useSyncExternalStore,react/useSyncExternalStore"
+        },
+        {
           "name": "SrcFile",
           "value": "pnpm-lock.yaml"
         },
@@ -48149,7 +48093,7 @@
         }
       ],
       "purl": "pkg:npm/react@19.3.0",
-      "scope": "optional",
+      "scope": "required",
       "tags": [
         "framework"
       ],
@@ -55897,24 +55841,6 @@
                 "value": "pnpm-lock.yaml"
               }
             ]
-          }
-        ],
-        "occurrences": [
-          {
-            "line": 5,
-            "location": "vitest.config.mts"
-          },
-          {
-            "line": 5,
-            "location": "vitest.setup.ts"
-          },
-          {
-            "line": 7,
-            "location": "vitest.config.mts"
-          },
-          {
-            "line": 7,
-            "location": "vitest.setup.ts"
           }
         ]
       },

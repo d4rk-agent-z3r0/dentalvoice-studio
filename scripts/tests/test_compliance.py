@@ -161,3 +161,30 @@ def test_normalise_sbom_drops_volatile_and_personal_npm_properties() -> None:
     }
     names = [p["name"] for p in normalise_sbom(sbom)["components"][0]["properties"]]
     assert names == ["SrcFile", "cdx:npm:artifactIntegrity", "cdx:npm:publishTime"]
+
+
+def test_normalise_sbom_drops_source_line_evidence_but_keeps_identity() -> None:
+    def sbom(line: int) -> dict[str, Any]:
+        return {
+            "components": [
+                {
+                    "bom-ref": "pkg:npm/react@19.3.0",
+                    "evidence": {
+                        "identity": [{"field": "purl", "confidence": 1}],
+                        "occurrences": [{"location": "src/app/page.tsx", "line": line}],
+                    },
+                },
+                {
+                    "bom-ref": "pkg:npm/only-occurrences@1.0.0",
+                    "evidence": {"occurrences": [{"location": "src/x.ts", "line": 1}]},
+                },
+            ]
+        }
+
+    first, edited = normalise_sbom(sbom(3)), normalise_sbom(sbom(40))
+    assert first == edited  # moving an import does not change the SBOM
+    components = {c["bom-ref"]: c for c in first["components"]}
+    assert components["pkg:npm/react@19.3.0"]["evidence"] == {
+        "identity": [{"field": "purl", "confidence": 1}]
+    }
+    assert "evidence" not in components["pkg:npm/only-occurrences@1.0.0"]

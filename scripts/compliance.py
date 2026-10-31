@@ -385,6 +385,14 @@ def normalise_sbom(sbom: dict[str, Any]) -> dict[str, Any]:
     sbom.pop("annotations", None)
     metadata = sbom.get("metadata", {})
     metadata.pop("timestamp", None)
+    # cdxgen's evidence.occurrences lists the source lines that import each package. It changes
+    # with every application code edit, not with dependencies; identity evidence is kept.
+    for component in sbom.get("components", []):
+        evidence = component.get("evidence")
+        if isinstance(evidence, dict):
+            evidence.pop("occurrences", None)
+            if not evidence:
+                component.pop("evidence")
     text = json.dumps(sbom)
     for path in (str(ROOT), str(Path(tempfile.gettempdir()))):
         text = text.replace(path, ".")
