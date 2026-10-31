@@ -12,7 +12,7 @@ FRONTEND := frontend
 # Docker Compose and the backend Settings read .env themselves; test-integration reads one key.
 ENV_FILE := .env
 
-.PHONY: help install up down lint typecheck test test-integration test-e2e verify compliance license-check
+.PHONY: help install up migrate seed down lint typecheck test test-integration test-e2e verify compliance license-check
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -23,6 +23,12 @@ install: ## Install backend and frontend dependencies from lockfiles
 
 up: ## Build and start db, backend and frontend; waits until all are healthy
 	docker compose up -d --build --wait
+
+migrate: ## Apply database migrations to DATABASE_URL (reads .env)
+	cd $(BACKEND) && uv run alembic upgrade head
+
+seed: ## Load the synthetic demo clinics and scenarios into DATABASE_URL (idempotent)
+	cd $(BACKEND) && uv run python -m app.demo.seed
 
 down: ## Stop the stack (keeps the database volume)
 	docker compose down

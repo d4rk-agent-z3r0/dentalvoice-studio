@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Unit | pytest, pytest-asyncio | State machine, intake validation/normalisation, proposal validator, utterance assembler, slot computation, timezone maths, mock providers | Pure Python, no I/O |
 | Contract | pytest + recorded payloads | Provider adapters translate real Deepgram/Gemini message shapes into our domain types; failure shapes (timeouts, 4xx/5xx, malformed JSON) | Fixtures under `tests/contract/payloads/` |
-| Integration | pytest + HTTPX + real PostgreSQL | Migrations up/down, repositories, services, REST, WebSocket, tenant isolation, concurrent booking | Disposable Postgres database per session (`TEST_DATABASE_URL`) |
+| Integration | pytest + HTTPX + real PostgreSQL | Migrations up/down, database constraints, repositories, services, REST, WebSocket, tenant isolation, concurrent booking | `TEST_DATABASE_URL`, rebuilt with Alembic (downgrade to base, upgrade to head) at session start. Tests isolate themselves by creating their own clinics, so services commit for real. Migration tests use throwaway scratch databases. |
 | Frontend unit | Vitest + React Testing Library | Scenario selection, transcript rendering, interim vs final display, error/loading/empty states | jsdom |
 | E2E | Playwright | All five scenarios in mock mode; assert UI **and** persisted DB state via the API | `docker compose` stack |
 

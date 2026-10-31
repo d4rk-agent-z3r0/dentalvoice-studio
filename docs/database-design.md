@@ -1,39 +1,42 @@
 # Database Design
 
-> Status: **Proposed (Milestone 1)** — implemented in Milestone 2 (core) and Milestone 6 (booking).
+> Status: **Implemented (Milestone 2)** in Alembic revision `293745f95565`
+> (`backend/migrations/versions/20261031_0001_core_domain_schema.py`). `ws_tickets` arrives with
+> Milestone 8.
 
 ## Conventions
 
 | Rule | Detail |
 |---|---|
-| Primary keys | `uuid` generated in the application (`uuid7` for index locality) |
-| Timestamps | `timestamptz`, stored in UTC; every table has `created_at`, mutable tables have `updated_at` |
-| Tenancy | Every clinic-owned table has `clinic_id NOT NULL` FK + an index leading with `clinic_id` |
-| Naming | snake_case plural tables; constraint names via SQLAlchemy naming convention (`pk_`, `fk_`, `uq_`, `ck_`, `ix_`, `ex_`) |
-| Enums | PostgreSQL `text` + `CHECK` constraints (cheaper to migrate than native enums) |
-| Migrations | Alembic only; no `create_all` outside throwaway tests |
+| Primary keys | `uuid` generated in the application (UUIDv7, `app/core/ids.py`, for index locality) |
+| Timestamps | `timestamptz`, stored in UTC. Every table has `created_at`; mutable tables also have `updated_at`. Append-only tables (`conversation_turns`, `conversation_events`, `intake_snapshots`, `audit_events`) have no `updated_at`. |
+| Tenancy | Every clinic-owned table has `clinic_id NOT NULL`. Child rows reference parents through **composite foreign keys `(clinic_id, parent_id)`**, so the database rejects a row linking two clinics' data. |
+| Naming | snake_case plural tables; constraints named by the SQLAlchemy naming convention (`pk_`, `fk_`, `uq_`, `ck_`, `ix_`) plus explicit `ex_` exclusion constraints |
+| Enums | `varchar` + named `CHECK` constraints generated from the Python `StrEnum` (cheaper to migrate than native enums) |
+| Migrations | Alembic only. `tests/integration/test_migrations.py` proves upgrade → models match (no autogenerate diff) → downgrade leaves nothing → upgrade again |
 
 ## Entities
 
 | Table | Purpose | Key columns / constraints |
 |---|---|---|
-| `clinics` | Fictional clinic tenant | `name`, `slug` (uq), `timezone` (IANA, validated) |
-| `users` | Dashboard identity | `email` (uq, `example.*` domains in seed), `password_hash` (argon2id), `is_active` |
+| `clinics` | Fictional clinic tenant | `name`, `slug` (uq, kebab-case CHECK), `timezone` (IANA, validated by the service layer) |
+| `users` | Dashboard identity | `email` (uq, reserved-domain CHECK), `password_hash` (argon2id, Milestone 8), `is_active` |
 | `clinic_users` | Membership + role | (`clinic_id`,`user_id`) uq, `role` ∈ {`admin`,`staff`,`viewer`} |
-| `dentists` | Fictional providers | `clinic_id`, `display_name` |
-| `dentist_schedules` | Weekly working hours | `dentist_id`, `weekday` 0–6, `start_local`, `end_local` (clinic-local `time`), ck start < end |
-| `appointment_types` | Service catalogue | `clinic_id`, `code` (uq per clinic), `duration_minutes` ck > 0 |
-| `synthetic_personas` | Generated caller identities | `clinic_id`, names, reserved contact values (`@example.com`, `+1-555-01xx`) |
-| `synthetic_scenarios` | Scenario definition | `clinic_id`, `code` (A–E), `persona_id`, `objective`, `expected` (jsonb), `clips` (jsonb ordered list of fixture IDs) |
-| `patients` | Synthetic patient record created/updated from a confirmed snapshot | `clinic_id`, `persona_id` nullable, normalised names, contact fields, `status` |
-| `conversations` | One simulated call | `clinic_id`, `scenario_id`, `patient_id` nullable, `state`, `state_version` (optimistic lock), `provider_mode`, `started_at`, `ended_at`, `turn_count` |
-| `conversation_turns` | Committed utterances | `conversation_id`, `seq` (uq per conv), `speaker` ∈ {`caller`,`receptionist`}, `text`, `stt_ms`, `llm_ms`, `tts_ms`, `total_ms` |
-| `conversation_events` | Append-only timeline | `conversation_id`, `type` (state_changed, field_proposed, field_rejected, provider_error, escalated, …), `payload` jsonb |
-| `intake_drafts` | Per-field proposals with provenance | `conversation_id`, `field`, `value`, `status` ∈ {`provided`,`needs_confirmation`,`confirmed`,`rejected`,`superseded`}, `source_turn_id`, `confidence`, `rejection_reason` |
-| `intake_snapshots` | Immutable confirmed intake | `conversation_id` (uq), `data` jsonb validated by `IntakeSnapshot` schema, `confirmed_at` |
-| `appointments` | Booking | `clinic_id`, `patient_id`, `dentist_id`, `appointment_type_id`, `starts_at`, `ends_at`, `status` ∈ {`requested`,`confirmed`,`cancelled`,`rescheduled`}, `idempotency_key`, `conversation_id` nullable |
-| `ws_tickets` | Single-use WS auth | `jti` (pk), `user_id`, `clinic_id`, `conversation_id`, `expires_at`, `used_at` |
-| `audit_events` | Security-relevant actions | `clinic_id`, `actor_user_id`, `action`, `resource_type`, `resource_id`, `request_id` — no free-text PII |
+| `dentists` | Fictional providers | `clinic_id`, `display_name`, `is_active` |
+| `dentist_schedules` | Weekly working hours | `(clinic_id, dentist_id)` FK, `weekday` 0–6 (Monday = 0), `start_local` < `end_local` (clinic-local `time`) |
+| `appointment_types` | Service catalogue | `code` (uq per clinic), `duration_minutes` > 0 and a multiple of 15 |
+| `appointment_slots` | Published bookable calendar (ADR-0004 revision) | `(clinic_id, dentist_id)` FK, `starts_at` < `ends_at` (UTC), `status` ∈ {`open`,`blocked`}, exclusion constraint: one dentist's slots never overlap |
+| `synthetic_personas` | Generated caller identities | names, reserved contact CHECKs, `preferred_contact_channel`, `patient_type`, `background` |
+| `synthetic_scenarios` | Scenario definition | `code` A–Z (uq per clinic), `(clinic_id, persona_id)` FK, `objective`, `clips` (jsonb array of fixture IDs), `expected` (jsonb object, `ScenarioExpectation` schema) |
+| `patients` | Synthetic patient record | names, contact fields (reserved CHECKs, at least one present), `patient_type`, `status` ∈ {`prospective`,`registered`,`archived`}; **duplicate detection**: unique per clinic on `lower(email)` and on `phone` |
+| `conversations` | One simulated call | `(clinic_id, scenario_id)` and `(clinic_id, patient_id)` FKs, `state` (12 states), `state_version` ≥ 1 (optimistic lock), `provider_mode`, `turn_count`, `started_at`, `ended_at`; CHECK: `ended_at` is set **iff** the state is terminal |
+| `conversation_turns` | Committed utterances | `seq` (uq per conversation), `speaker` ∈ {`caller`,`receptionist`}, `text`, `clip_id`, non-negative `stt_ms`/`llm_ms`/`tts_ms`/`total_ms` |
+| `conversation_events` | Append-only timeline | `type` (`state_changed`, `field_proposed`, `field_rejected`, `provider_error`, `escalated`, …), `payload` jsonb object |
+| `intake_drafts` | Per-field proposals with provenance | `field`, `value`, `status` ∈ {`provided`,`needs_confirmation`,`confirmed`,`rejected`,`superseded`}, `(clinic_id, source_turn_id)` FK, `confidence` 0–1; CHECK: rejected **iff** `rejection_reason`; partial unique: at most one live value per field |
+| `intake_snapshots` | Immutable confirmed intake, separate from drafts | `conversation_id` (uq), `data` jsonb object, `confirmed_at` |
+| `appointments` | Booking | composite FKs to patient, dentist, appointment type, conversation and `rescheduled_from`; `status` ∈ {`requested`,`confirmed`,`cancelled`,`rescheduled`}; `idempotency_key` (8–128 chars), `request_hash` |
+| `ws_tickets` | Single-use WS auth (Milestone 8) | `jti` (pk), `user_id`, `clinic_id`, `conversation_id`, `expires_at`, `used_at` |
+| `audit_events` | Security-relevant actions | `clinic_id` (nullable: pre-auth events), `actor_user_id`, `action`, `resource_type`, `resource_id`, `request_id`; identifiers only, no free text |
 
 ## Integrity guarantees
 
@@ -42,19 +45,27 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 ALTER TABLE appointments ADD CONSTRAINT ex_appointments_dentist_no_overlap
   EXCLUDE USING gist (dentist_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&)
-  WHERE (status IN ('requested', 'confirmed'));
+  WHERE (status IN ('confirmed', 'requested'));
+
+-- Published slots for one dentist never overlap
+ALTER TABLE appointment_slots ADD CONSTRAINT ex_appointment_slots_dentist_no_overlap
+  EXCLUDE USING gist (dentist_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&);
 
 -- Idempotent booking per clinic
-ALTER TABLE appointments ADD CONSTRAINT uq_appointments_clinic_idempotency
+ALTER TABLE appointments ADD CONSTRAINT uq_appointments_clinic_id_idempotency_key
   UNIQUE (clinic_id, idempotency_key);
+
+-- Cross-tenant references are impossible: e.g.
+ALTER TABLE appointments ADD FOREIGN KEY (clinic_id, patient_id) REFERENCES patients (clinic_id, id);
 ```
 
-`synthetic_*` / `patients` contact columns carry `CHECK` constraints restricting email domains to
-`example.com|example.org|example.net` and phone numbers to the `555-01xx` fictional range, so a real
-contact value cannot be stored even by a buggy code path.
+Contact columns on `users`, `synthetic_personas` and `patients` carry `CHECK` constraints that only
+accept `example.com|example.org|example.net` emails and `+1-555-0100`–`+1-555-0199` phone numbers
+(patterns in `app/domain/contact.py`, shared with Pydantic validation). A real contact value cannot
+be stored even by a buggy code path.
 
-## Why computed availability instead of `appointment_slots`
+## Availability
 
-Materialised slot rows duplicate schedule data and must be regenerated whenever durations or hours
-change. Availability = schedule windows − active appointments, computed per request; the exclusion
-constraint is the final arbiter under concurrency. Documented in ADR-0004.
+Published `appointment_slots` are the calendar; availability is open slots minus active
+appointments. Double booking is still decided only by the `appointments` exclusion constraint.
+See the ADR-0004 revision for why the table was added.
