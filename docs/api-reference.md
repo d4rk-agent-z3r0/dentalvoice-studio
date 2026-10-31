@@ -15,12 +15,12 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | HTTP | Codes |
 |---|---|
 | 400 | `VALIDATION_ERROR`, `INVALID_STATE_TRANSITION` |
-| 401 | `AUTH_REQUIRED`, `AUTH_INVALID` |
+| 401 | `AUTH_REQUIRED`, `AUTH_INVALID` (with `WWW-Authenticate: Bearer`) |
 | 403 | `FORBIDDEN` |
 | 404 | `NOT_FOUND` (also returned for other clinics' resources — no existence leak) |
-| 409 | `BOOKING_SLOT_TAKEN`, `IDEMPOTENCY_CONFLICT`, `CONVERSATION_CLOSED` |
+| 409 | `BOOKING_SLOT_TAKEN`, `SLOT_UNAVAILABLE`, `IDEMPOTENCY_CONFLICT`, `APPOINTMENT_NOT_ACTIVE`, `CONVERSATION_CLOSED`, `CONCURRENT_UPDATE`, `DUPLICATE_PATIENT` |
 | 429 | `RATE_LIMITED` |
-| 502/503 | `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE` |
+| 502/503 | `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`, `AUTH_NOT_CONFIGURED` (503) |
 
 ## Health — M1
 
@@ -29,25 +29,37 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | GET | `/health/live` | `200 {"status":"ok"}` — process is up |
 | GET | `/health/ready` | `200 {"status":"ok","database":"ok"}` or `503` when the DB is unreachable |
 
-## Auth — M8 (dev token stub in M2 tests)
+## Auth
 
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/api/v1/auth/login` | `{email,password}` → `{access_token, clinics[]}` (first membership active) |
-| POST | `/api/v1/auth/switch-clinic` | `{clinic_id}` → new token, only if the user is a member |
-| GET | `/api/v1/auth/me` | user, active clinic, role |
+Access tokens are HS256 JWTs signed with `JWT_SECRET` (32+ characters; the app refuses shorter
+keys). Claims: `sub` (user), `clinic_id`, `role`, `iss`, `aud`, `iat`, `exp`, `jti`. Only `HS256`
+is accepted, so unsigned (`alg: none`) and algorithm-confusion tokens are rejected.
 
-## Scenarios & conversations — M2/M3/M5
+| Status | How a token is obtained |
+|---|---|
+| **Shipped (M3)** | `make dev-token EMAIL=demo.staff@example.com CLINIC=brightsmile`: development only, refuses to run in production; reads the user's real membership and role |
+| M8 | `POST /api/v1/auth/login` `{email,password}` → `{access_token, clinics[]}`; `POST /api/v1/auth/switch-clinic`; `GET /api/v1/auth/me` |
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/api/v1/scenarios` | Scenarios for the active clinic |
-| POST | `/api/v1/conversations` | `{scenario_id}` → conversation in `CREATED` |
-| GET | `/api/v1/conversations?state=&limit=&cursor=` | Paginated list |
-| GET | `/api/v1/conversations/{id}` | Turns, events, intake drafts, snapshot |
-| POST | `/api/v1/conversations/{id}/turns` | Text turn for mock/dev (M3); `{text}` only allowed when `ENVIRONMENT=development` |
-| POST | `/api/v1/conversations/{id}/ws-ticket` | → `{ticket, expires_in}` (60 s, single use) |
-| GET | `/api/v1/audio/clips/{clip_id}` | Allow-listed fixture audio (`audio/wav`) |
+Roles: `admin` and `staff` may create and drive conversations; `viewer` is read-only (`403
+FORBIDDEN`).
+
+## Scenarios & conversations — shipped in M3
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| GET | `/api/v1/scenarios` | any | Scenarios of the token's clinic |
+| POST | `/api/v1/conversations` | admin, staff | `{scenario_id}` → `201` conversation in `CREATED`. Unknown fields (e.g. `clinic_id`) are a `400` |
+| GET | `/api/v1/conversations?state=&limit=` | any | Newest first, `limit` 1–100 |
+| GET | `/api/v1/conversations/{id}` | any | Conversation, turns, timeline events, every intake draft (with history), missing fields, snapshot |
+| POST | `/api/v1/conversations/{id}/start` | admin, staff | `CREATED → GREETING`; returns the greeting turn |
+| POST | `/api/v1/conversations/{id}/turns` | admin, staff | `{text}` (1–500 chars). Typed caller turn for development and tests; **`403` when `ENVIRONMENT=production`**, where caller speech only comes from audio fixtures (M5) |
+| POST | `/api/v1/conversations/{id}/end` | admin, staff | Caller hung up: `ABANDONED`; `409 CONVERSATION_CLOSED` if already ended |
+| POST | `/api/v1/conversations/{id}/ws-ticket` | admin, staff | M8: `{ticket, expires_in}` (60 s, single use) |
+| GET | `/api/v1/audio/clips/{clip_id}` | any | M5: allow-listed fixture audio (`audio/wav`) |
+
+A turn response (`TurnResultRead`) carries `previous_state`, `state`, the full `path` of states
+entered in that turn, `state_version`, the receptionist `reply`, `missing_fields`,
+`rejected_fields` (field → reason), `corrected_fields` and the measured `llm_ms`.
 
 ## WebSocket — M5
 
@@ -69,16 +81,109 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | S→C | `latency` | `{turn_seq, stt_ms, llm_ms, tts_first_byte_ms, total_ms}` measured server-side |
 | S→C | `error` | `{code, message, provider?}` — surfaced in UI, never swallowed |
 
-## Patients, appointments, analytics — M6/M7
+## Availability — shipped in M6
+
+`GET /api/v1/availability?appointment_type_id=&date=&days=` · any role
+
+| Parameter | Rules |
+|---|---|
+| `appointment_type_id` | Required. An active type of the token's clinic; anything else (unknown, inactive, another clinic's) is `404 NOT_FOUND` |
+| `date` | Required. First clinic-local day, `YYYY-MM-DD` |
+| `days` | Optional, 1–14, default 1 |
+
+A start time is offered when consecutive **open** published slots of one active dentist tile
+exactly `[start, start + duration)`, no active (`requested`/`confirmed`) appointment of that dentist
+overlaps it, it lies inside the requested local days and it is in the future. Local days are
+resolved per date, so a daylight-saving day is 23 or 25 hours long and opening hours stay at the
+same wall-clock time. Availability is advisory: a listed time can still be taken by the time it is
+booked (`409 BOOKING_SLOT_TAKEN`).
+
+```json
+{
+  "appointment_type_id": "…", "duration_minutes": 45, "timezone": "Europe/London",
+  "first_day": "2030-01-07", "days": 1,
+  "slots": [
+    { "dentist_id": "…", "dentist_name": "Dr. Ada Example",
+      "starts_at": "2030-01-07T09:00:00Z", "ends_at": "2030-01-07T09:45:00Z",
+      "starts_at_local": "2030-01-07T09:00:00+00:00", "ends_at_local": "2030-01-07T09:45:00+00:00" }
+  ]
+}
+```
+
+Slots are ordered by start time, then dentist. `starts_at`/`ends_at` are UTC; the `*_local` strings
+are the same instants in the clinic's timezone, with their offset.
+
+## Appointments — shipped in M6
+
+| Method | Path | Role | Success |
+|---|---|---|---|
+| GET | `/api/v1/appointments?from=&to=&status=&limit=` | any | `200` list |
+| POST | `/api/v1/appointments` | admin, staff | `201` appointment |
+| POST | `/api/v1/appointments/{id}/cancel` | admin, staff | `200` appointment (`cancelled`) |
+| POST | `/api/v1/appointments/{id}/reschedule` | admin, staff | `201` the **new** appointment |
+
+Every write is one PostgreSQL transaction, and the response is built only after it has committed:
+a `2xx` means the database holds the result, and any failure is an error response.
+
+**Appointment** (all responses):
+
+```json
+{ "id": "…", "patient_id": "…", "dentist_id": "…", "appointment_type_id": "…",
+  "conversation_id": null, "rescheduled_from_id": null, "status": "confirmed",
+  "starts_at": "2030-01-07T09:00:00Z", "ends_at": "2030-01-07T09:30:00Z",
+  "starts_at_local": "2030-01-07T09:00:00+00:00", "ends_at_local": "2030-01-07T09:30:00+00:00",
+  "timezone": "Europe/London", "created_at": "…", "updated_at": "…" }
+```
+
+### `POST /api/v1/appointments`
+
+Header `Idempotency-Key`: required, 8–128 characters from `A-Z a-z 0-9 _ -`. Body:
+
+```json
+{ "patient_id": "…", "appointment_type_id": "…", "dentist_id": "…",
+  "starts_at": "2030-01-07T09:00:00Z", "conversation_id": null }
+```
+
+`starts_at` needs an explicit offset (a naive time is a `400`) and is stored in UTC; `ends_at` is
+`starts_at` plus the type's duration. Unknown fields such as `clinic_id` are a `400`. The appointment
+is created as `confirmed`.
+
+| Outcome | Response |
+|---|---|
+| Booked | `201` |
+| Same key, same body (also when the requests race) | The original appointment, as it is now, `201` with `Idempotent-Replayed: true`. No new row |
+| Same key, different body | `409 IDEMPOTENCY_CONFLICT` |
+| Another active appointment of that dentist overlaps | `409 BOOKING_SLOT_TAKEN` (the database exclusion constraint decided) |
+| Past, not exactly covered by open published slots, blocked, or dentist inactive | `409 SLOT_UNAVAILABLE` |
+| Patient, appointment type (or inactive type), dentist or conversation unknown or another clinic's | `404 NOT_FOUND` naming the resource |
+| Viewer | `403 FORBIDDEN` |
+
+The body hash is SHA-256 of the canonical JSON of the validated body (sorted keys, UTC instant,
+`conversation_id` always present), so the same instant written with another offset is the same
+request. Keys are scoped to the clinic. A request that failed stored nothing, so retrying its key
+runs it again.
+
+### Cancel and reschedule
+
+`POST …/{id}/cancel`, no body: `confirmed`/`requested` → `cancelled`; the time becomes bookable
+again. `POST …/{id}/reschedule` `{"starts_at": "…"}`: same patient, dentist and type. In one
+transaction the original becomes `rescheduled` and a new `confirmed` appointment with
+`rescheduled_from_id` is created, so the new time may overlap the old one. If the new time is
+taken (`409 BOOKING_SLOT_TAKEN`) or not bookable (`409 SLOT_UNAVAILABLE`), nothing changes. Either
+call on an appointment that is no longer active is `409 APPOINTMENT_NOT_ACTIVE`; another clinic's
+appointment is `404`.
+
+### List
+
+`from` and `to` are clinic-local days (`YYYY-MM-DD`, both inclusive, `to` ≥ `from`), filtering on
+`starts_at`; `status` is one of `requested`, `confirmed`, `cancelled`, `rescheduled`; `limit` 1–200
+(default 100). Ordered by `starts_at`.
+
+## Patients, analytics — M7
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/v1/patients?q=&status=` | Search + filter |
 | GET | `/api/v1/patients/{id}` | Profile, snapshots, conversations, appointments |
-| GET | `/api/v1/availability?appointment_type_id=&date=` | Slots in clinic-local time + UTC |
-| GET | `/api/v1/appointments?from=&to=&status=` | |
-| POST | `/api/v1/appointments` | Header `Idempotency-Key` required; same key + same body → same result; different body → `409 IDEMPOTENCY_CONFLICT` |
-| POST | `/api/v1/appointments/{id}/cancel` | |
-| POST | `/api/v1/appointments/{id}/reschedule` | `{starts_at}` atomic cancel-and-create |
 | GET | `/api/v1/analytics/summary` | Counts, completion rate, avg duration from persisted data |
 | GET | `/api/v1/analytics/latency` | p50/p95 of measured stage timings |

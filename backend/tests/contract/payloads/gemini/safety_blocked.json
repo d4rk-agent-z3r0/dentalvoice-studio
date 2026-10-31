@@ -1,0 +1,10 @@
+{
+  "promptFeedback": {
+    "blockReason": "SAFETY"
+  },
+  "usageMetadata": {
+    "promptTokenCount": 800,
+    "totalTokenCount": 800
+  },
+  "modelVersion": "gemini-test-model"
+}

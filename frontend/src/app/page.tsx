@@ -1,16 +1,76 @@
 // SPDX-FileCopyrightText: 2026 Siddharth Majhi
 // SPDX-License-Identifier: MIT
+import Link from "next/link";
+
+const SECTIONS = [
+  {
+    href: "/simulator",
+    title: "Simulator",
+    body: "Run a synthetic caller scenario against the receptionist. Text mode for development today; synthetic voice playback arrives in Milestone 5.",
+    available: true,
+  },
+  {
+    href: "/conversations",
+    title: "Conversations",
+    body: "Review every call: transcript, state timeline, captured intake fields with their status, and the confirmed snapshot.",
+    available: true,
+  },
+  {
+    href: "/patients",
+    title: "Patients",
+    body: "Patient records created from completed onboarding calls.",
+    available: false,
+  },
+  {
+    href: "/appointments",
+    title: "Appointments",
+    body: "Appointment requests and their booking status.",
+    available: false,
+  },
+  {
+    href: "/analytics",
+    title: "Analytics",
+    body: "Completion rates and measured latency, computed from persisted data only.",
+    available: false,
+  },
+] as const;
+
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4 px-6 py-16">
-      <h1 className="text-4xl font-bold tracking-tight">DentalVoice Studio</h1>
-      <p className="text-lg text-slate-600">
-        An AI voice receptionist simulator for fictional dental clinics. Synthetic callers, real
-        speech recognition and language models, deterministic onboarding workflow.
-      </p>
-      <p className="text-sm text-slate-500">
-        The simulator and clinic dashboard are under construction.
-      </p>
-    </main>
+    <div className="space-y-8">
+      <section className="max-w-3xl">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">DentalVoice Studio</h1>
+        <p className="mt-3 text-lg text-slate-700">
+          An AI receptionist simulator for fictional dental clinics. Synthetic callers, a language
+          model that proposes replies, and a deterministic onboarding workflow that decides what is
+          recorded.
+        </p>
+      </section>
+      <section aria-labelledby="sections-title">
+        <h2 id="sections-title" className="sr-only">
+          Sections
+        </h2>
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {SECTIONS.map((section) => (
+            <li key={section.href}>
+              <Link
+                href={section.href}
+                className="card block h-full p-5 hover:border-teal-600 hover:shadow"
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-base font-semibold text-slate-900">{section.title}</span>
+                  {section.available ? null : (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                      Later milestone
+                    </span>
+                  )}
+                </span>
+                <span className="mt-2 block text-sm text-slate-600">{section.body}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }

@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "{\"assistant_response\": \"Let me read that back. Ava"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "MAX_TOKENS",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 900,
+    "candidatesTokenCount": 256,
+    "totalTokenCount": 1156
+  },
+  "modelVersion": "gemini-test-model",
+  "responseId": "resp-000000000000"
+}
