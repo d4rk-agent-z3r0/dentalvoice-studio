@@ -49,7 +49,8 @@ async def test_a_missing_hash_fails_after_doing_the_same_work(
 
     monkeypatch.setattr(PasswordHasher, "verify", spy)
     assert not (await verify_password(None, _password())).ok
-    assert len(checked) == 1 and checked[0].startswith("$argon2id$")  # the dummy hash
+    assert len(checked) == 1
+    assert checked[0].startswith("$argon2id$")  # the dummy hash
 
 
 async def test_an_over_long_attempt_is_refused_without_hashing_it_whole() -> None:
@@ -66,7 +67,8 @@ async def test_old_parameters_are_flagged_for_rehash() -> None:
     password = _password()
     weak = PasswordHasher(time_cost=1, memory_cost=8, parallelism=1).hash(password)
     check = await verify_password(weak, password)
-    assert check.ok and check.needs_rehash
+    assert check.ok
+    assert check.needs_rehash
     assert not (await verify_password(hash_password(password), password)).needs_rehash
 
 
