@@ -109,6 +109,10 @@ class DeepgramTextToSpeechProvider:
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    @property
+    def is_closed(self) -> bool:
+        return self._client.is_closed
+
     async def _stream(self, text: str) -> AsyncGenerator[bytes]:
         request = self._client.build_request(
             "POST",

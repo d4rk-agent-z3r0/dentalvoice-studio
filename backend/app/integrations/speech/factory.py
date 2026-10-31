@@ -18,6 +18,13 @@ class SpeechProviders:
     stt: SpeechToTextProvider
     tts: TextToSpeechProvider
 
+    async def aclose(self) -> None:
+        """Release pooled connections (the live TTS client holds an HTTP pool). Mocks hold none."""
+        for provider in (self.stt, self.tts):
+            close = getattr(provider, "aclose", None)
+            if close is not None:
+                await close()
+
 
 def build_speech_providers(settings: Settings, library: ClipLibrary) -> SpeechProviders:
     if settings.voice_provider_mode is ProviderMode.MOCK:

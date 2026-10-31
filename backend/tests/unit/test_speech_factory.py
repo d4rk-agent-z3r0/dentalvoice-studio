@@ -55,3 +55,30 @@ def test_live_mode_with_every_setting_builds_the_deepgram_pair_without_network()
     assert "model=stt-test" in url
     assert "k" * 20 not in url
     assert providers.tts.output_format.sample_rate == 24_000
+
+
+async def test_the_app_closes_the_live_speech_clients_on_shutdown() -> None:
+    from app.main import create_app
+
+    settings = make_test_settings(
+        UNREACHABLE_DATABASE_URL,
+        voice_provider_mode=ProviderMode.LIVE,
+        deepgram_api_key=SecretStr("k" * 20),
+        stt_model="stt-test",
+        tts_model="tts-test",
+        gemini_api_key=SecretStr("g" * 20),
+        gemini_model="model-test",
+    )
+    app = create_app(settings)
+    async with app.router.lifespan_context(app):
+        tts = app.state.speech.tts
+        assert isinstance(tts, DeepgramTextToSpeechProvider)
+        assert not tts.is_closed
+    assert tts.is_closed  # the pooled HTTP connections are released, not leaked
+
+
+async def test_closing_mock_speech_providers_is_a_no_op() -> None:
+    providers = build_speech_providers(
+        make_test_settings(UNREACHABLE_DATABASE_URL), default_library()
+    )
+    await providers.aclose()

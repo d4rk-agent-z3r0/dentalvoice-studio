@@ -59,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await speech.aclose()
             await engine.dispose()
             log.info("shutdown")
 
