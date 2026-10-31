@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Application settings, loaded once from the environment."""
 
+import re
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -17,6 +18,9 @@ from app.core.passwords import validate_new_password
 REPO_ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+_ORIGIN = re.compile(r"https?://[a-z0-9.\-]+(:[0-9]{1,5})?")
 
 
 class Environment(StrEnum):
@@ -93,6 +97,18 @@ class Settings(BaseSettings):
     def _strong_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is not None and len(value.get_secret_value()) < 32:
             raise ValueError("JWT_SECRET must be at least 32 characters.")
+        return value
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _exact_origins(cls, value: list[str]) -> list[str]:
+        """Browser origins allowed to call the API and open its WebSocket: exact values only."""
+        for origin in value:
+            if not _ORIGIN.fullmatch(origin):
+                raise ValueError(
+                    f"CORS_ORIGINS entries must be exact origins like https://app.example.com "
+                    f"(scheme and host, optional port, no path, no wildcard); got {origin!r}"
+                )
         return value
 
     @field_validator("demo_password")

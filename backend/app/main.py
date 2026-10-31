@@ -16,12 +16,14 @@ from app.api import health
 from app.api import v1 as api_v1
 from app.api.errors import install_error_handlers
 from app.api.rate_limits import RequestLimits
-from app.core.config import Settings, get_settings
+from app.core.config import Environment, Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.database.session import create_engine, create_session_factory
 from app.integrations.llm.factory import build_conversation_provider
 from app.integrations.speech.factory import build_speech_providers
+from app.middleware.body_limit import BodyLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.orchestrators.conversation import ConversationOrchestrator
 from app.voice.clips import default_library
 
@@ -64,14 +66,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await engine.dispose()
             log.info("shutdown")
 
+    docs = settings.environment is not Environment.PRODUCTION
     app = FastAPI(
         title="DentalVoice Studio API",
         version="0.1.0",
         description="Synthetic AI voice patient onboarding simulator. Demo data only.",
         lifespan=lifespan,
+        # The interactive docs load scripts from a CDN and describe every route: development only.
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
     )
     app.state.settings = settings
     app.state.request_limits = RequestLimits(settings)
+    # Added innermost first: SecurityHeaders wraps everything (even the last-resort 500), and a
+    # 413 from BodyLimit still carries CORS headers so the browser can read it.
+    app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -81,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID", "Idempotent-Replayed", "X-Clip-Source"],
     )
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware, docs_enabled=docs)
     install_error_handlers(app)
     app.include_router(health.router)
     app.include_router(api_v1.router)

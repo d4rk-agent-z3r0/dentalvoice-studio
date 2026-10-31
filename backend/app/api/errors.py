@@ -8,6 +8,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.rate_limit import RateLimitedError
 from app.core.security import AuthError
@@ -26,6 +27,10 @@ _DOMAIN_STATUS = {
     "IDEMPOTENCY_CONFLICT": 409,
     "APPOINTMENT_NOT_ACTIVE": 409,
 }
+
+
+_HTTP_CODES = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED", 413: "PAYLOAD_TOO_LARGE"}
+_HTTP_MESSAGES = {404: "Not found.", 405: "Method not allowed."}
 
 
 def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -61,6 +66,17 @@ def install_error_handlers(app: FastAPI) -> None:
         )
         body = error_body(error.code, message, provider=error.provider)
         return JSONResponse(body, status_code=503 if unavailable else 502)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http(_: Request, error: StarletteHTTPException) -> JSONResponse:
+        """Framework errors (unknown route, wrong method, body too large), in the same shape."""
+        code = _HTTP_CODES.get(error.status_code, f"HTTP_{error.status_code}")
+        message = _HTTP_MESSAGES.get(error.status_code, str(error.detail))
+        if error.status_code == 413:
+            message = str(error.detail)
+        return JSONResponse(
+            error_body(code, message), status_code=error.status_code, headers=error.headers
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, error: RequestValidationError) -> JSONResponse:

@@ -15,12 +15,29 @@ The active clinic comes **only** from the token's `clinic_id` claim, never from 
 | HTTP | Codes |
 |---|---|
 | 400 | `VALIDATION_ERROR`, `INVALID_STATE_TRANSITION` |
+| 405 | `METHOD_NOT_ALLOWED` |
+| 413 | `PAYLOAD_TOO_LARGE` (request bodies are capped at 64 KiB) |
 | 401 | `AUTH_REQUIRED`, `AUTH_INVALID`, `AUTH_FAILED` (sign-in) (with `WWW-Authenticate: Bearer`) |
 | 403 | `FORBIDDEN` |
 | 404 | `NOT_FOUND` (also returned for other clinics' resources — no existence leak) |
 | 409 | `BOOKING_SLOT_TAKEN`, `SLOT_UNAVAILABLE`, `IDEMPOTENCY_CONFLICT`, `APPOINTMENT_NOT_ACTIVE`, `CONVERSATION_CLOSED`, `CONCURRENT_UPDATE`, `DUPLICATE_PATIENT` |
 | 429 | `RATE_LIMITED` |
 | 502/503 | `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`, `AUTH_NOT_CONFIGURED` (503) |
+
+Every failure uses this shape, including framework errors (unknown route `404 NOT_FOUND`, wrong
+method, oversized body).
+
+## HTTP hardening — M8
+
+| Measure | Detail |
+|---|---|
+| CORS | Exact origins from `CORS_ORIGINS` only (scheme, host, optional port; no `*`, no path; checked at startup). No credentials mode: auth is a bearer header, never a cookie, so cross-site request forgery has nothing to ride on |
+| WebSocket origin | A socket whose `Origin` is not in `CORS_ORIGINS` is refused before the handshake (`403`) and before the ticket is redeemed. Browsers always send `Origin` |
+| Response headers | `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, and `Cache-Control: no-store` unless a route sets its own (clips: `private, max-age=3600`) |
+| Request size | Bodies over 64 KiB are refused with `413`, before reading when `Content-Length` says so, otherwise as soon as the count passes the limit |
+| API docs | `/docs`, `/redoc` and `/openapi.json` exist outside production only. They are the only paths without the CSP, because Swagger UI needs its scripts |
+
+HSTS belongs to the TLS terminator in front of the API; the app itself serves plain HTTP.
 
 ## Health — M1
 

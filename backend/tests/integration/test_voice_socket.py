@@ -264,3 +264,23 @@ async def test_every_scenario_completes_by_voice(
     ]
     assert detail["conversation"]["state"] == scenario.final_state.value
     assert (detail["snapshot"] is not None) == (scenario.final_state.value == "COMPLETED")
+
+
+async def test_a_socket_from_another_site_is_refused_without_spending_the_ticket(
+    server: str, http: httpx.AsyncClient, clinic: DemoClinic
+) -> None:
+    conversation_id = await _conversation(http, clinic)
+    ticket = await _ticket(http, conversation_id)
+    url = ws_url(server, conversation_id, ticket)
+
+    with pytest.raises(InvalidStatus) as caught:
+        async with websockets.connect(url, origin=websockets.Origin("https://evil.example.com")):
+            pass
+    assert caught.value.response.status_code == 403
+
+    # The configured frontend origin is admitted, with the same (still unused) ticket.
+    async with websockets.connect(
+        url, origin=websockets.Origin("http://localhost:3000")
+    ) as connection:
+        ready = await VoiceClient(connection).until(lambda m: m["type"] == "ready")
+    assert ready["state"] == "CREATED"

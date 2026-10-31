@@ -29,6 +29,7 @@ router = APIRouter(tags=["voice"])
 MAX_COMMAND_BYTES = 1024
 # Close codes in the application range (4000-4999).
 CLOSE_TICKET_REJECTED = 4401
+CLOSE_ORIGIN_REJECTED = 4403
 
 
 class TicketRead(BaseModel):
@@ -95,6 +96,13 @@ async def conversation_socket(
     ticket: Annotated[str, Query(min_length=20, max_length=128)],
 ) -> None:
     app_state = websocket.app.state
+    # CORS does not apply to WebSockets: without this check any site could open a socket in the
+    # user's browser. A browser always sends Origin; other clients carry no ambient credentials.
+    origin = websocket.headers.get("origin")
+    if origin is not None and origin not in app_state.settings.cors_origins:
+        log.info("ws_origin_rejected", conversation_id=str(conversation_id))
+        await websocket.close(code=CLOSE_ORIGIN_REJECTED)
+        return
     try:
         admission = await TicketService(app_state.session_factory).redeem(ticket, conversation_id)
     except TicketRejectedError:
