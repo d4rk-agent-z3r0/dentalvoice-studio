@@ -167,7 +167,7 @@ Server → client:
 | `intake` | `{missing_fields, rejected_fields: {field: reason}, corrected_fields}` |
 | `latency` | `{turn_seq, stt_ms, llm_ms, tts_first_byte_ms, total_ms}` measured on the server; `null` when a stage did not happen (the greeting has no STT or LLM stage). Also stored on the turns |
 | `closed` | `{state}` — the call ended; the server then closes the socket normally |
-| `error` | `{code, message, provider?}` — `NO_SPEECH`, `NO_MORE_CLIPS`, `CONVERSATION_CLOSED`, `INVALID_STATE_TRANSITION`, `INVALID_MESSAGE`, `BUSY`, `AUDIO_NOT_ACCEPTED`, `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`. Never swallowed, never replaced by mock output |
+| `error` | `{code, message, provider?}` — `NO_SPEECH`, `NO_MORE_CLIPS`, `CONVERSATION_CLOSED`, `INVALID_STATE_TRANSITION`, `INVALID_MESSAGE`, `BUSY`, `AUDIO_NOT_ACCEPTED`, `IDLE_TIMEOUT`, `PROVIDER_ERROR`, `PROVIDER_UNAVAILABLE`. Never swallowed, never replaced by mock output. `IDLE_TIMEOUT`: no command and nothing in progress for `VOICE_IDLE_TIMEOUT_SECONDS` (default 300); the socket closes normally and the call resumes on a new socket |
 
 Latency definitions: `stt_ms` = end of caller audio → utterance complete; `llm_ms` = the
 conversation-model call (all attempts); `tts_first_byte_ms` = synthesis request → first audio

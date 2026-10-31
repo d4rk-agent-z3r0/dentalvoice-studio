@@ -72,6 +72,7 @@ class VoiceSession:
         library: ClipLibrary,
         out: Outbound,
         realtime_factor: float = 1.0,
+        idle_timeout_seconds: float | None = None,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._clinic_id = clinic_id
@@ -83,6 +84,7 @@ class VoiceSession:
         self._library = library
         self._out = out
         self._realtime = realtime_factor
+        self._idle_timeout = idle_timeout_seconds
         self._clock = clock
         self._speaking = False
         self._closed = asyncio.Event()
@@ -115,9 +117,19 @@ class VoiceSession:
                 if next_command is None:
                     next_command = asyncio.ensure_future(anext(reader))
                 waiting: set[asyncio.Future[Any]] = {next_command, ended}
-                if current is not None and not current.done():
+                busy = current is not None and not current.done()
+                if busy and current is not None:
                     waiting.add(current)
-                done, _ = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+                done, _ = await asyncio.wait(
+                    waiting,
+                    timeout=None if busy else self._idle_timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    # Nothing asked of the session for too long: release the connection. The call
+                    # itself is untouched and resumes on a new socket (a new ticket).
+                    await self._error("IDLE_TIMEOUT", "Closed after a period of inactivity.")
+                    break
                 if ended in done:
                     break  # the call reached a terminal state
                 if current is not None and current in done:

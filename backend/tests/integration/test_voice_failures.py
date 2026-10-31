@@ -153,6 +153,7 @@ async def _session(
     stt: Any = None,
     tts: Any = None,
     model: Any = None,
+    idle_timeout: float | None = None,
 ) -> tuple[VoiceSession, Recorder, Commands, uuid.UUID, uuid.UUID]:
     await seed(session_factory, days=1)
     clinic = await load_clinic(session_factory, "brightsmile")
@@ -171,6 +172,7 @@ async def _session(
         library=library,
         out=recorder,
         realtime_factor=0,
+        idle_timeout_seconds=idle_timeout,
     )
     return session, recorder, commands, clinic.id, conversation.id
 
@@ -298,3 +300,30 @@ async def test_client_disconnect_cancels_speech_in_flight(session_factory: Sessi
         await runner
     assert tts.cancelled == 1
     assert len(out.frames) < 200  # the rest of the sentence was never streamed
+
+
+async def test_an_idle_socket_is_released_and_the_call_left_resumable(
+    session_factory: SessionFactory,
+) -> None:
+    session, out, commands, clinic_id, cid = await _session(session_factory, idle_timeout=0.2)
+    runner = asyncio.create_task(session.run(commands))
+    commands.send("start")
+    await out.wait_for("latency")
+    async with asyncio.timeout(5):
+        await runner  # no further command: the session ends on its own
+
+    assert out.of("error")[-1]["code"] == "IDLE_TIMEOUT"
+    assert not out.of("closed")  # the call did not end
+    progress = await ConversationService(session_factory).voice_progress(clinic_id, cid)
+    assert progress.state.value == "GREETING"
+
+
+async def test_a_long_turn_is_not_mistaken_for_idleness(session_factory: SessionFactory) -> None:
+    tts = SlowTTS()  # speaks for about 4 s, far longer than the idle limit
+    session, out, commands, _, _ = await _session(session_factory, tts=tts, idle_timeout=0.2)
+    runner = asyncio.create_task(session.run(commands))
+    commands.send("start")
+    await out.wait_for("assistant.audio_end")
+    assert not [e for e in out.of("error") if e["code"] == "IDLE_TIMEOUT"]
+    commands.send("end")
+    await runner

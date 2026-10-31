@@ -122,6 +122,7 @@ async def conversation_socket(
         library=app_state.clip_library,
         out=out,
         realtime_factor=app_state.settings.voice_realtime_factor,
+        idle_timeout_seconds=app_state.settings.voice_idle_timeout_seconds,
     )
     log.info("ws_session_started", conversation_id=str(conversation_id))
     try:

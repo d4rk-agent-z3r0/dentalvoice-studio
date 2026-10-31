@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     # 1.0 streams caller fixtures to STT in real time (a live call); 0 streams as fast as possible
     # (tests). Latency figures are only meaningful at 1.0.
     voice_realtime_factor: float = Field(default=1.0, ge=0, le=4)
+    # A voice socket with no command and nothing in progress for this long is closed. The call is
+    # not ended: it resumes on a new socket.
+    voice_idle_timeout_seconds: float = Field(default=300, gt=0, le=3600)
 
     @field_validator(
         "jwt_secret",
