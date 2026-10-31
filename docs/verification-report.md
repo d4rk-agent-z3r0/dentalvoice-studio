@@ -717,3 +717,48 @@ mutation builds. Screenshots are kept outside the repository: `01-signin-desktop
 Not verified here: the real backend endpoints (not ready); the Docker image build; an HTTPS
 deployment (`wss:` and `upgrade-insecure-requests` are unit-tested only); browsers other than
 Chromium; screen-reader behaviour beyond the roles and labels the unit tests assert.
+
+## Milestone 8 — Auth, rate limits, HTTP hardening and integration
+
+Run 2026-10-31 on `feat/m8-security`. The two sections above (reply guard; frontend sign-in and
+headers) were built in parallel and applied on top of this branch.
+
+| Commit | Check | Result |
+|---|---|---|
+| `feat(auth)` | Licences: argon2-cffi 25.1.0, argon2-cffi-bindings 26.1.0 (both `License-Expression: MIT`); `make compliance`, `make license-check` | exit 0; 598 packages, 0 violations |
+| | 17 API tests: login shape and sort order, case-insensitive email, five failure causes indistinguishable (code, message, `WWW-Authenticate`), validation never echoes input, no password or email in logs, hash upgrade on sign-in, demo password from the seed, switch-clinic (role per clinic, 403 non-member, 401 no token), access revoked at once on deactivation, removal or role change | passed |
+| | 12 unit tests: argon2id parameters, salting, dummy-hash path on unknown users, over-long attempts, corrupt hash, rehash flag, password policy | passed |
+| | Mutations: per-request membership check removed; inactive users allowed; dummy hash skipped | 3, 1 and 1 tests failed; code restored |
+| `style(auth)` | **Process error.** `feat(auth)` was committed with two Ruff PT018 findings: the lint step ran in a subshell, and its failure did not stop the chained commit. The full suite was skipped too. Fixed in a follow-up commit (no amend); the full suite then passed (711). The gate is now a script whose exit status the commit depends on | lint clean |
+| `security(api)` rate limits | 7 unit tests (bucket arithmetic, fake clock) and 7 API tests through the real app with a controlled clock: per-IP sign-in, per-account lockout (even for the right password, released after refill), success clears failures, per-user requests, tighter writes, invalid tokens use no budget, switch-off | passed |
+| | Mutations: account lockout removed; per-user limit removed | 1 test failed each; code restored |
+| `security(api)` hardening | 17 unit tests: defensive headers on 200/401/404/405/400, `no-store` default, 413 by `Content-Length` and by counting a chunked body, a body at the limit accepted, CORS allow and deny, exact-origin validation, docs present in development and absent in production; 1 live WebSocket test: foreign `Origin` refused with 403 without spending the ticket | passed |
+| | Mutations: WebSocket origin check removed; chunk counting removed | 1 test failed each; code restored |
+| `security(voice)` | Idle socket released with `IDLE_TIMEOUT`, call left in `GREETING`; a 4-second reply under a 0.2-second limit is not cut off | passed; applying the timeout while busy fails the second test |
+| `fix(booking)` lock | The reply-guard work saw the 20-way race fail under load: every loser used up its four deadlock retries. The race test now also asserts that no transaction was retried; the deadlock test asserts exactly one `40P01` retry (so the log capture sees retries) | passed |
+| | Stress: the race file on three databases at once with three CPU-bound processes. Before the per-dentist lock: 4 rounds, 1 failure. After: 6 rounds, 0 failures | as stated; a small sample, so the mechanism (queueing on the lock) is the main argument |
+| `fix(api)` | `Retry-After` added to `Access-Control-Expose-Headers` (the frontend work found it missing) | test passed |
+
+### Browser check against the real stack
+
+The real API (mock speech and model), PostgreSQL migrated and seeded with a freshly generated demo
+password (kept in a private scratch file, never printed), and the production frontend build
+(`next start`, nonce CSP), driven by Playwright in Chromium:
+
+| Check | Result |
+|---|---|
+| Wrong password: server message, request id, password field cleared | passed |
+| Five failures, then the right password: 429, countdown from `Retry-After`, submit disabled | passed |
+| Sign-in: header shows user and clinic; login sent no `Authorization`; password not in storage or URL | passed |
+| Switch to Juniper & Vale: list refetched with the new token, shows its own empty list, no BrightSmile names; switch back shows BrightSmile's patients | passed |
+| Voice call (scenario A): ticket requested with a token, two caller lines committed with their exact transcripts, clip played from `blob:`, hang up ends the call | passed |
+| Sign-out clears storage; no CSP violations; no console errors (other than the browser's own lines for the intended 401 and 429) | passed |
+| API log after the run: the password 0 times, emails 0 times, the one socket ticket `[REDACTED]` | as stated |
+
+22 of 22 checks passed. On the way there, two of my own checks were wrong rather than the app.
+A text match on the clinic name returned before the page had remounted (the code shows one store
+update for both). The script also failed to switch back before the call. Querying the API directly
+confirmed the right data per clinic, and the checks now wait for the refetched list.
+
+**Not verified:** live Gemini and Deepgram (no keys); Docker image build with these changes (CI
+builds it); browsers other than Chromium.
