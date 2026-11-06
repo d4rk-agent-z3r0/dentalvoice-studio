@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # SPDX-FileCopyrightText: 2026 Siddharth Majhi
 # SPDX-License-Identifier: MIT
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH" NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 
@@ -24,7 +24,7 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 # Invoke Next directly: no package-manager download needed in this stage.
 RUN ./node_modules/.bin/next build
 
-FROM node:22-alpine AS runtime
+FROM node:25-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
