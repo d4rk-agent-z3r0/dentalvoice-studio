@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 FROM ghcr.io/astral-sh/uv:0.11.32 AS uv
 
-FROM python:3.13-slim AS build
+FROM python:3.15-slim AS build
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     if [ -f /run/secrets/extra_ca ]; then export SSL_CERT_FILE=/run/secrets/extra_ca; fi; \
     uv sync --frozen --no-dev
 
-FROM python:3.13-slim AS runtime
+FROM python:3.15-slim AS runtime
 RUN useradd --system --uid 10001 --no-create-home app
 WORKDIR /app
 COPY --from=build --chown=app:app /app/.venv /app/.venv
